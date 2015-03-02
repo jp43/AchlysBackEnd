@@ -1,10 +1,36 @@
-import os, sys, random, time, csv
+import os, sys, random, time, csv, shutil, socket
+
+# Function to run a shell command and return the output
+def pipetext(cmd):
+    pipe = os.popen(cmd)
+    if pipe == None:
+        print 'Pipe from command %s did not open' % cmd
+        sys.exit()
+    text = pipe.next()
+    status = pipe.close()
+    if status != None:
+        print 'Command "%s" did not exit without errors' % cmd
+        sys.exit()
+    return text
+
+# Function to count the structures in an SDF file
+def count_structs(chem_filename):
+    return int(pipetext("grep '$$$$' %s | wc -l" % chem_filename).strip())
+
+# Function to get the name of structure i in an SDF file
+def get_struct_name(chem_filename, chem_i):
+    chem_name = pipetext('babel -isdf -f %d -l %d %s -otxt 2>/dev/null' % 
+            (chem_i, chem_i, chem_filename))
+    chem_name = chem_name.strip()
+    return chem_name
+
 
 # Init random number generator
 SEED = 754855
 random.seed(SEED)
 
 # Parameters for toxicity prediction method
+NUM_RECEPTORS = 1
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
 DOCK_MAX_HITS = 7
@@ -19,13 +45,25 @@ CRITICAL_Z = 2.155
 
 # Paths
 # Working directory and working filenames
-DATADIR = 'data'
-WORKDIR = 'tox_work'
-PARAMDIR = 'params'
+BASEDIR = os.getcwd()
+DATADIR = BASEDIR + '/' + 'data'
+WORKDIR = BASEDIR + '/' + 'tox_work'
+PARAMDIR = BASEDIR + '/' + 'params'
+
+# Tool paths
+if socket.gethostname() == 
+    MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
+    MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+
+# Filenames
+PARAMFILE = 'quick_params.csv'
+RECEP_NAME = 'hERG-conformations_%02d.pdb'
+GPF = PARAMDIR + '/' + 'autodock' + '/' + 'grid.gpf'
+DPF = PARAMDIR + '/' + 'autodock' + '/' + 'quick_dock.dpf'
 
 # Load parameters from parameter file
-param_file = open(PARAMDIR + 'params.csv')
-param_reader = csv.reader(param_file, 'rU')
+param_file = open(PARAMDIR + '/' + PARAMFILE, 'rU')
+param_reader = csv.reader(param_file)
 for row in param_reader:
     key = row[0]
     value = float(row[1])
@@ -55,24 +93,111 @@ for row in param_reader:
         CRITICAL_Z = value
 param_file.close()
 
-# Function to run a shell command and return the output
-def pipetext(cmd):
-    pipe = os.popen(cmd)
-    if pipe == None:
-        print 'Pipe from command %s did not open' % cmd
+# Setup
+
+# Check that required command line arguments are provided
+if len(sys.argv) != 3:
+    print 'Usage: %s chem_filename out_filename' % (sys.argv[0])
+    sys.exit()
+
+# Read the command line arguments
+chem_path = BASEDIR + '/' + sys.argv[1]
+out_path = BASEDIR + '/' + sys.argv[2]
+
+# Check that the input file exists and the output file does not exist
+if not os.path.isfile(chem_path):
+    print 'File %s does not exist' % chem_path
+    sys.exit()
+if os.path.isfile(out_path):
+    print 'File %s already exists' % out_path
+    sys.exit()
+
+# Find the number of chemical structures
+num_chem = count_structs(chem_path)
+
+# Create the working directory
+#cmd = 'rm -rf %s' % WORKDIR
+#status = os.system(cmd)
+#if status != 0:
+#    print 'Command "%s" did not exit without errors' % cmd
+#    sys.exit()
+try:
+    os.mkdir(WORKDIR)
+except OSError:
+    print 'Error creating directory %s' % WORKDIR
+    sys.exit()
+
+# Find the number and names of chemical structures
+lig_id_list = []
+lig_path_dict = {}
+lig_name_dict = {}
+num_chem = count_structs(chem_path)
+for lig_id in xrange(0, num_chem):
+    lig_id_list.append(lig_id)
+    lig_name = get_struct_name(chem_path, lig_id + 1)
+    lig_name_dict[lig_id] = lig_name
+    lig_path_dict[lig_id] = '/dev/null'
+
+rec_id_list = []
+rec_path_dict = {}
+for rec_id in xrange(0, NUM_RECEPTORS):
+    rec_id_list.append(rec_id)
+    rec_path_dict[rec_id] = 'data/hERG-conformations_%d.pdb' % rec_id
+
+# Function to run an AutoDockTools script
+def runadt(cmd):
+    bash_script_filename = 'run_adt_python_script.sh'
+    bash_script_template = '#!/bin/bash\nsource %s/bin/mglenv.sh\n%s/%s'
+    if os.path.isfile(bash_script_filename):
+        print 'File %s already exists' % bash_script_filename
         sys.exit()
-    text = pipe.next()
-    status = pipe.close()
-    if status != None:
-        print 'Command "%s" did not exit without errors' % cmd
+    try:
+        bash_script_file = open(bash_script_filename, 'w')
+    except IOError:
+        print 'Error opening %s' % bash_script_filename
         sys.exit()
-    return text
+    bash_script_file.write(bash_script_template % (MGLTOOLS_PATH, 
+            MGLTOOLS_UTIL_PATH, cmd))
+    bash_script_file.close()
+    cmd_bash = 'bash %s >/dev/null' % bash_script_filename
+    status = os.system(cmd_bash)
+    if status != 0:
+        print 'Command "%s" did not exit without errors' % cmd_bash
+        sys.exit()
+    try:
+        os.remove(bash_script_filename)
+    except OSError:
+        print 'Error removing file %s' % bash_script_filename
+        sys.exit()
 
 def dock(lig_id, rec_id):
     affinity = random.random() * -10
     cluster_size = random.random()
     pose_path = '/dev/null'
     success = True
+    
+    # Convert ligand from SDF to PDB
+    DOCKWORKDIR = WORKDIR + '/' + 'dock_lig%d_rec%d' % (lig_id, rec_id)
+    os.mkdir(DOCKWORKDIR)
+    os.chdir(DOCKWORKDIR)
+    os.system('babel -f%d -l%d -isdf %s -opdb %s' % 
+            (lig_id + 1, lig_id + 1, chem_path, DOCKWORKDIR + '/' + 'lig.pdb'))
+    
+    # Convert ligand from PDB to PDBQT
+    runadt('prepare_ligand4.py -l %s -o %s' % 
+            (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
+    
+    # Convert receptor from PDB to PDBQT
+    RECEPTOR_PATH = DATADIR + '/' + RECEP_NAME % (rec_id + 1)
+    runadt('prepare_receptor4.py -r %s -o %s' %
+            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
+    
+    # Create docking input files (.gpf & .dpf)
+    shutil.copyfile(GPF, DOCKWORKDIR + '/' + 'grid.gpf')
+    shutil.copyfile(DPF, DOCKWORKDIR + '/' + 'dock.dpf')
+    
+    print 'Done dock for lig_id=%d rec_id=%d' % (lig_id, rec_id)
+
     return success, affinity, cluster_size, pose_path
 
 def do_md(lig_id, rec_id):
@@ -85,17 +210,6 @@ def do_mmpbsa(traj_id):
     conformation = '/dev/null'
     success = True
     return success, energy, conformation
-
-# Function to count the structures in an SDF file
-def count_structs(chem_filename):
-    return int(pipetext("grep '$$$$' %s | wc -l" % chem_filename).strip())
-
-# Function to get the name of structure i in an SDF file
-def get_struct_name(chem_filename, chem_i):
-    chem_name = pipetext('babel -isdf -f %d -l %d %s -otxt 2>/dev/null' % 
-            (chem_i, chem_i, chem_filename))
-    chem_name = chem_name.strip()
-    return chem_name
 
 def calc_distance(conformation):
     return random.random() * 10
@@ -207,56 +321,6 @@ def do_prediction(lig_id, rec_id_list):
 
 
 
-# Setup
-
-# Check that required command line arguments are provided
-if len(sys.argv) != 3:
-    print 'Usage: %s chem_filename out_filename' % (sys.argv[0])
-    sys.exit()
-
-# Read the command line arguments
-chem_path = sys.argv[1]
-out_path = sys.argv[2]
-
-# Check that the input file exists and the output file does not exist
-if not os.path.isfile(chem_path):
-    print 'File %s does not exist' % chem_path
-    sys.exit()
-if os.path.isfile(out_path):
-    print 'File %s already exists' % out_path
-    sys.exit()
-
-# Find the number of chemical structures
-num_chem = count_structs(chem_path)
-
-# Create the working directory
-#cmd = 'rm -rf %s' % WORKDIR
-#status = os.system(cmd)
-#if status != 0:
-#    print 'Command "%s" did not exit without errors' % cmd
-#    sys.exit()
-try:
-    os.mkdir(WORKDIR)
-except OSError:
-    print 'Error creating directory %s' % WORKDIR
-    sys.exit()
-
-# Find the number and names of chemical structures
-lig_id_list = []
-lig_path_dict = {}
-lig_name_dict = {}
-num_chem = count_structs(chem_path)
-for lig_id in xrange(0, num_chem):
-    lig_id_list.append(lig_id)
-    lig_name = get_struct_name(chem_path, lig_id + 1)
-    lig_name_dict[lig_id] = lig_name
-    lig_path_dict[lig_id] = '/dev/null'
-
-rec_id_list = []
-rec_path_dict = {}
-for rec_id in xrange(0, 3):
-    rec_id_list.append(rec_id)
-    rec_path_dict[rec_id] = 'data/hERG-conformations_%d.pdb' % rec_id
 
 start = time.clock() 
 
