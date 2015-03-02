@@ -51,9 +51,15 @@ WORKDIR = BASEDIR + '/' + 'tox_work'
 PARAMDIR = BASEDIR + '/' + 'params'
 
 # Tool paths
-if socket.gethostname() == 
+if socket.gethostname() == 'turtle.local'
     MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
     MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+elif 
+    MGLTOOLS_PATH = ''
+    MGLTOOLS_UTIL_PATH = ''
+else:
+    print 'Unsupported system'
+    sys.exit9)
 
 # Filenames
 PARAMFILE = 'quick_params.csv'
@@ -184,13 +190,13 @@ def dock(lig_id, rec_id):
             (lig_id + 1, lig_id + 1, chem_path, DOCKWORKDIR + '/' + 'lig.pdb'))
     
     # Convert ligand from PDB to PDBQT
-    runadt('prepare_ligand4.py -l %s -o %s' % 
-            (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
+    #runadt('prepare_ligand4.py -l %s -o %s' % 
+    #        (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
     
     # Convert receptor from PDB to PDBQT
     RECEPTOR_PATH = DATADIR + '/' + RECEP_NAME % (rec_id + 1)
-    runadt('prepare_receptor4.py -r %s -o %s' %
-            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
+    #runadt('prepare_receptor4.py -r %s -o %s' %
+    #        (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
     
     # Create docking input files (.gpf & .dpf)
     shutil.copyfile(GPF, DOCKWORKDIR + '/' + 'grid.gpf')
