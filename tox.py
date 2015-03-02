@@ -51,15 +51,15 @@ WORKDIR = BASEDIR + '/' + 'tox_work'
 PARAMDIR = BASEDIR + '/' + 'params'
 
 # Tool paths
-if socket.gethostname() == 'turtle.local'
+if socket.gethostname() == 'turtle.local':
     MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
     MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
-elif 
+elif socket.gethostname() == 'silence':
     MGLTOOLS_PATH = ''
     MGLTOOLS_UTIL_PATH = ''
 else:
     print 'Unsupported system'
-    sys.exit9)
+    sys.exit()
 
 # Filenames
 PARAMFILE = 'quick_params.csv'
