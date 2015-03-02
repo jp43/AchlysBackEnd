@@ -1,4 +1,4 @@
-import os, sys, random, time
+import os, sys, random, time, csv
 
 # Init random number generator
 SEED = 754855
@@ -21,7 +21,39 @@ CRITICAL_Z = 2.155
 # Working directory and working filenames
 DATADIR = 'data'
 WORKDIR = 'tox_work'
+PARAMDIR = 'params'
 
+# Load parameters from parameter file
+param_file = open(PARAMDIR + 'params.csv')
+param_reader = csv.reader(param_file, 'rU')
+for row in param_reader:
+    key = row[0]
+    value = float(row[1])
+    if key == 'SEED':
+        SEED = value
+    elif key == 'DOCK_MAX_AFFINITY':
+        DOCK_MAX_AFFINITY = value
+    elif key == 'DOCK_MIN_CLUSTER':
+        DOCK_MIN_CLUSTER = value
+    elif key == 'DOCK_MAX_HITS':
+        DOCK_MAX_HITS = value
+    elif key == 'MD_TIME':
+        MD_TIME = value
+    elif key == 'MMPBSA_TIME':
+        MMPBSA_TIME = value
+    elif key == 'MMPBSA_STEP':
+        MMPBSA_STEP = value
+    elif key == 'TOX_ENERGY_MAX':
+        TOX_ENERGY_MAX = value
+    elif key == 'TOX_DIST_MAX':
+        TOX_DIST_MAX = value
+    elif key == 'CRITICAL_X':
+        CRITICAL_X = value
+    elif key == 'CRITICAL_Y':
+        CRITICAL_Y = value
+    elif key == 'CRITICAL_Z':
+        CRITICAL_Z = value
+param_file.close()
 
 # Function to run a shell command and return the output
 def pipetext(cmd):
