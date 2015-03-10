@@ -45,18 +45,27 @@ CRITICAL_Z = 2.155
 
 # Paths
 # Working directory and working filenames
-BASEDIR = os.getcwd()
-DATADIR = BASEDIR + '/' + 'data'
-WORKDIR = BASEDIR + '/' + 'tox_work'
-PARAMDIR = BASEDIR + '/' + 'params'
+if socket.gethostname() == 'turtle.local':
+    BASEDIR = os.getcwd()
+    DATADIR = BASEDIR + '/' + 'data'
+    WORKDIR = BASEDIR + '/' + 'tox_work'
+    PARAMDIR = BASEDIR + '/' + 'params'
+elif socket.gethostname() == 'silence':
+    BASEDIR = os.getcwd()
+    DATADIR = '/home/achlys/AchlysBackEnd/data'
+    WORKDIR = BASEDIR + '/' + 'tox_work'
+    PARAMDIR = '/home/achlys/AchlysBackEnd/params'
+else:
+    print 'Unsupported system'
+    sys.exit()
 
 # Tool paths
 if socket.gethostname() == 'turtle.local':
     MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
     MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
 elif socket.gethostname() == 'silence':
-    MGLTOOLS_PATH = ''
-    MGLTOOLS_UTIL_PATH = ''
+    MGLTOOLS_PATH = '/usr/local/mgltools'
+    MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
 else:
     print 'Unsupported system'
     sys.exit()
@@ -107,8 +116,8 @@ if len(sys.argv) != 3:
     sys.exit()
 
 # Read the command line arguments
-chem_path = BASEDIR + '/' + sys.argv[1]
-out_path = BASEDIR + '/' + sys.argv[2]
+chem_path = sys.argv[1]
+out_path = sys.argv[2]
 
 # Check that the input file exists and the output file does not exist
 if not os.path.isfile(chem_path):
@@ -190,13 +199,13 @@ def dock(lig_id, rec_id):
             (lig_id + 1, lig_id + 1, chem_path, DOCKWORKDIR + '/' + 'lig.pdb'))
     
     # Convert ligand from PDB to PDBQT
-    #runadt('prepare_ligand4.py -l %s -o %s' % 
-    #        (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
+    runadt('prepare_ligand4.py -l %s -o %s' % 
+            (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
     
     # Convert receptor from PDB to PDBQT
     RECEPTOR_PATH = DATADIR + '/' + RECEP_NAME % (rec_id + 1)
-    #runadt('prepare_receptor4.py -r %s -o %s' %
-    #        (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
+    runadt('prepare_receptor4.py -r %s -o %s' %
+            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
     
     # Create docking input files (.gpf & .dpf)
     shutil.copyfile(GPF, DOCKWORKDIR + '/' + 'grid.gpf')

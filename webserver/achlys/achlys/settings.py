@@ -36,9 +36,9 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'tastypie',
     'backend',
-    'polls',
+    'rest_framework',
+    'talk'
 )
 
 MIDDLEWARE_CLASSES = (
