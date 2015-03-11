@@ -1,0 +1,21 @@
+source leaprc.ff99SB
+#source leaprc.lipid11
+source leaprc.gaff
+loadamberprep hit.prepin
+loadamberparams hit.frcmod  
+p = loadPdb target-ligand.pdb
+charge p
+bond p.995.SG p.397.SG
+bond p.907.SG p.230.SG
+bond p.142.SG p.740.SG
+bond p.652.SG p.485.SG
+bond p.291.SG p.287.SG
+bond p.797.SG p.801.SG
+bond p.32.SG p.36.SG
+bond p.542.SG p.546.SG
+solvatebox p TIP3PBOX 10
+addions p Na+ 148 Cl- 136
+charge p
+saveAmberParm p start.prmtop start.inpcrd
+savepdb p start.pdb
+quit

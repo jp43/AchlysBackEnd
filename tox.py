@@ -33,7 +33,7 @@ random.seed(SEED)
 NUM_RECEPTORS = 1
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
-DOCK_MAX_HITS = 7
+DOCK_MAX_HITS = 3
 MD_TIME = 10000 #ps
 MMPBSA_TIME = 5000 #ps
 MMPBSA_STEP = 10 #ps
@@ -47,9 +47,9 @@ CRITICAL_Z = 2.155
 # Working directory and working filenames
 if socket.gethostname() == 'turtle.local':
     BASEDIR = os.getcwd()
-    DATADIR = BASEDIR + '/' + 'data'
+    DATADIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/data'
     WORKDIR = BASEDIR + '/' + 'tox_work'
-    PARAMDIR = BASEDIR + '/' + 'params'
+    PARAMDIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/params'
 elif socket.gethostname() == 'silence':
     BASEDIR = os.getcwd()
     DATADIR = '/home/achlys/AchlysBackEnd/data'
@@ -63,6 +63,9 @@ else:
 if socket.gethostname() == 'turtle.local':
     MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
     MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
+    AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBER_BIN = '/Users/pwinter/Tools/amber14/bin'
 elif socket.gethostname() == 'silence':
     MGLTOOLS_PATH = '/usr/local/mgltools'
     MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
@@ -73,7 +76,7 @@ else:
 # Filenames
 PARAMFILE = 'quick_params.csv'
 RECEP_NAME = 'hERG-conformations_%02d.pdb'
-GPF = PARAMDIR + '/' + 'autodock' + '/' + 'grid.gpf'
+GPF = PARAMDIR + '/' + 'autodock' + '/' + 'quick_grid.gpf'
 DPF = PARAMDIR + '/' + 'autodock' + '/' + 'quick_dock.dpf'
 
 # Load parameters from parameter file
@@ -188,14 +191,14 @@ def runadt(cmd):
 def dock(lig_id, rec_id):
     affinity = random.random() * -10
     cluster_size = random.random()
-    pose_path = '/dev/null'
+    #pose_path = '/dev/null'
     success = True
     
     # Convert ligand from SDF to PDB
     DOCKWORKDIR = WORKDIR + '/' + 'dock_lig%d_rec%d' % (lig_id, rec_id)
     os.mkdir(DOCKWORKDIR)
     os.chdir(DOCKWORKDIR)
-    os.system('babel -f%d -l%d -isdf %s -opdb %s' % 
+    os.system('babel -f%d -l%d -isdf %s -opdb %s 2>/dev/null' % 
             (lig_id + 1, lig_id + 1, chem_path, DOCKWORKDIR + '/' + 'lig.pdb'))
     
     # Convert ligand from PDB to PDBQT
@@ -205,19 +208,48 @@ def dock(lig_id, rec_id):
     # Convert receptor from PDB to PDBQT
     RECEPTOR_PATH = DATADIR + '/' + RECEP_NAME % (rec_id + 1)
     runadt('prepare_receptor4.py -r %s -o %s' %
-            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'rec.pdbqt'))
+            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'target.pdbqt'))
     
     # Create docking input files (.gpf & .dpf)
     shutil.copyfile(GPF, DOCKWORKDIR + '/' + 'grid.gpf')
     shutil.copyfile(DPF, DOCKWORKDIR + '/' + 'dock.dpf')
     
+    # Run AutoGrid
+    os.system('%s -p %s -l grid.glg' % (AUTOGRID_EXE, GPF))
+    
+    # Run AutoDock
+    os.system('%s -p %s -l dock.dlg' % (AUTODOCK_EXE, DPF))
+    
+    #Get the best conformation
+    #Info is here: http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
+    os.system("grep '^DOCKED' dock.dlg | cut -c9- | cut -c-66 > complex.pdb")
+    pose_path = DOCKWORKDIR + '/' + 'complex.pdb'
+    
     print 'Done dock for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
     return success, affinity, cluster_size, pose_path
 
-def do_md(lig_id, rec_id):
+def do_md(lig_id, rec_id, pose_path):
     traj_path = '/dev/null'
     success = True
+    
+    #Create MD working directory
+    MDWORKDIR = WORKDIR + '/' + 'md_lig%d_rec%d' % (lig_id, rec_id)
+    os.mkdir(MDWORKDIR)
+    os.chdir(MDWORKDIR)
+    
+    #Copy required files to MD directory
+    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'hit.prepin', MDWORKDIR + '/' + 'hit.prepin')
+    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'leap.in', MDWORKDIR + '/' + 'leap.in')
+    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'mopac.in', MDWORKDIR + '/' + 'mopac.in')
+    
+    #Prepare system for MD using AmberTools
+    #os.system('%s/antechamber -i hit.pdb -fi pdb -o hit.prepin -fo prepi -j 4  -s 2 -at gaff -c bcc -du y -s 2 -pf y -nc 1' % AMBER_BIN)
+    #os.system('%s/parmchk -i hit.prepin -f prepi -o hit.frcmod' % AMBER_BIN)
+    #os.system('%s/tleap -f leap.in' % AMBER_BIN)
+
+    print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
+
     return success, traj_path
 
 def do_mmpbsa(traj_id):
@@ -304,7 +336,7 @@ def do_prediction(lig_id, rec_id_list):
     md_result_list = []
     for hit in dock_hit_list:
         rec_id, pose_path = hit
-        success, traj_path = do_md(rec_id, pose_path)
+        success, traj_path = do_md(lig_id, rec_id, pose_path)
         if not success:
             prediction_dict[lig_id] = 'MD_FAIL'
             continue
@@ -334,9 +366,6 @@ def do_prediction(lig_id, rec_id_list):
     return (energy, distance, prediction)
 
 
-
-
-
 start = time.clock() 
 
 # Predict toxicity for each ligand
@@ -352,5 +381,7 @@ print 'elapsed=%.2f sec' % elapsed
 # Output blocker predictions
 write_results(final_result_list, out_path)
 
-
+# Write DONE file
+done_path = out_path[0:-8] + '/DONE'
+os.system('touch %s' % done_path)
 

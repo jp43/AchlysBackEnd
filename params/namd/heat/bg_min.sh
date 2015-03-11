@@ -1,0 +1,1 @@
+runjob --np 1024 --ranks-per-node=16 --cwd=/Volumes/Hub/hERG/Screen-Data-Set-hERG/Screening-03-Jan15-Jim/Complexes/A_target_0_rank_5/min : /scinet/bgq/src/namd/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2 heat.conf

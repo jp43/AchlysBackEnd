@@ -1,0 +1,3 @@
+trajin  ../equ/equ.dcd 0 500 1
+image origin center familiar com :1-1021
+trajout run.mdcrd trajectory

@@ -2,18 +2,23 @@ autodock_parameter_version 4.2       # used by autodock to validate parameter se
 outlev 1                             # diagnostic output level
 intelec                              # calculate internal electrostatics
 seed pid time                        # seeds for random generator
-ligand_types A C Cl HD N NA OA       # atoms types in ligand
+ligand_types A S H C F I Cl  NA OA N HD P      # ligand atom types
 fld target.maps.fld                  # grid_data_file
 map target.A.map                     # atom-specific affinity map
+map target.S.map                     # atom-specific affinity map
+map target.H.map                     # atom-specific affinity map
 map target.C.map                     # atom-specific affinity map
+map target.F.map                     # atom-specific affinity map
+map target.I.map                     # atom-specific affinity map
 map target.Cl.map                    # atom-specific affinity map
-map target.HD.map                    # atom-specific affinity map
-map target.N.map                     # atom-specific affinity map
 map target.NA.map                    # atom-specific affinity map
 map target.OA.map                    # atom-specific affinity map
+map target.N.map                     # atom-specific affinity map
+map target.HD.map                    # atom-specific affinity map
+map target.P.map                     # atom-specific affinity map
 elecmap target.e.map                 # electrostatics map
 desolvmap target.d.map               # desolvation map
-move A.pdbqt                         # small molecule
+move lig.pdbqt                       # small molecule
 about -0.199 1.1281 0.0738           # small molecule center
 tran0 random                         # initial coordinates/A or random
 quaternion0 random                   # initial orientation
