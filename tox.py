@@ -69,6 +69,9 @@ if socket.gethostname() == 'turtle.local':
 elif socket.gethostname() == 'silence':
     MGLTOOLS_PATH = '/usr/local/mgltools'
     MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
+    AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBER_BIN = '/home/pwinter/amber14/bin'
 else:
     print 'Unsupported system'
     sys.exit()
