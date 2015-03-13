@@ -1,21 +1,49 @@
-import os, sys, random, time, csv, shutil, socket
+import sys, os, os.path, random, time, csv, shutil, socket
 
 # Function to run a shell command and return the output
 def pipetext(cmd):
     pipe = os.popen(cmd)
     if pipe == None:
-        print 'Pipe from command %s did not open' % cmd
+        print 'Pipe for command %s did not open' % cmd
         sys.exit()
     text = pipe.next()
     status = pipe.close()
     if status != None:
-        print 'Command "%s" did not exit without errors' % cmd
+        print 'Command %s did not exit without errors' % cmd
         sys.exit()
     return text
 
 # Function to count the structures in an SDF file
 def count_structs(chem_filename):
-    return int(pipetext("grep '$$$$' %s | wc -l" % chem_filename).strip())
+    struct_count = 0
+    in_mol = True
+    in_header = True
+    in_data = False
+    header_line_num = 0
+    HEADER_LINES = 4
+    sdfile = open(sys.argv[1])
+    for line in sdfile:
+        line = line.rstrip()
+        if in_mol:
+            if in_header:
+                header_line_num += 1
+                if header_line_num == HEADER_LINES:
+                    in_header = False
+            elif line == 'M  END':
+                in_mol = False
+        else:
+            if line.startswith('>'):
+                in_data = True
+            elif in_data:
+                if line == '':
+                    in_data = False
+            elif line == '$$$$':
+                struct_count += 1
+                in_mol = True
+                in_header = True
+                header_line_num = 0
+    sdfile.close()
+    return struct_count
 
 # Function to get the name of structure i in an SDF file
 def get_struct_name(chem_filename, chem_i):
@@ -24,12 +52,38 @@ def get_struct_name(chem_filename, chem_i):
     chem_name = chem_name.strip()
     return chem_name
 
+# Assign system specific variables
+hostname = socket.gethostname()
+if hostname == 'turtle.local':
+    MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
+    MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
+    AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBER_BIN = '/Users/pwinter/Tools/amber14/bin'
+    PARAMDIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/params'
+    DATADIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/data'
+elif hostanem == 'silence':
+    MGLTOOLS_PATH = '/usr/local/mgltools'
+    MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
+    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
+    AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBER_BIN = '/home/pwinter/amber14/bin'
+    PARAMDIR = '/home/achlys/AchlysBackEnd/params'
+    DATADIR = '/home/achlys/AchlysBackEnd/data'
+else:
+    print 'Unsupported system'
+    sys.exit()
 
-# Init random number generator
+# Directorites and filenames
+BASEDIR = os.getcwd()
+WORKDIR = '%s/tox_work' % BASEDIR
+PARAMFILE = 'quick_params.csv'
+RECEP_NAME = 'hERG-conformations_%02d.pdb'
+GPF = '%s/autodock/quick_grid.gpf' % PARAMDIR
+DPF = '%s/autodock/quick_dock.dpf' % PARAMDIR
+
+# Default parameters for toxicity prediction method
 SEED = 754855
-random.seed(SEED)
-
-# Parameters for toxicity prediction method
 NUM_RECEPTORS = 1
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
@@ -43,85 +97,49 @@ CRITICAL_X = 6.866
 CRITICAL_Y = 8.825
 CRITICAL_Z = 2.155
 
-# Paths
-# Working directory and working filenames
-if socket.gethostname() == 'turtle.local':
-    BASEDIR = os.getcwd()
-    DATADIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/data'
-    WORKDIR = BASEDIR + '/' + 'tox_work'
-    PARAMDIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/params'
-elif socket.gethostname() == 'silence':
-    BASEDIR = os.getcwd()
-    DATADIR = '/home/achlys/AchlysBackEnd/data'
-    WORKDIR = BASEDIR + '/' + 'tox_work'
-    PARAMDIR = '/home/achlys/AchlysBackEnd/params'
-else:
-    print 'Unsupported system'
-    sys.exit()
-
-# Tool paths
-if socket.gethostname() == 'turtle.local':
-    MGLTOOLS_PATH = '/Users/pwinter/Tools/mgltools'
-    MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
-    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
-    AUTODOCK_EXE = '/usr/local/bin/autodock4'
-    AMBER_BIN = '/Users/pwinter/Tools/amber14/bin'
-elif socket.gethostname() == 'silence':
-    MGLTOOLS_PATH = '/usr/local/mgltools'
-    MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
-    AUTOGRID_EXE = '/usr/local/bin/autogrid4'
-    AUTODOCK_EXE = '/usr/local/bin/autodock4'
-    AMBER_BIN = '/home/pwinter/amber14/bin'
-else:
-    print 'Unsupported system'
-    sys.exit()
-
-# Filenames
-PARAMFILE = 'quick_params.csv'
-RECEP_NAME = 'hERG-conformations_%02d.pdb'
-GPF = PARAMDIR + '/' + 'autodock' + '/' + 'quick_grid.gpf'
-DPF = PARAMDIR + '/' + 'autodock' + '/' + 'quick_dock.dpf'
-
 # Load parameters from parameter file
-param_file = open(PARAMDIR + '/' + PARAMFILE, 'rU')
+param_file = open('%s/%s' % (PARAMDIR, PARAMFILE), 'rU')
 param_reader = csv.reader(param_file)
 for row in param_reader:
     key = row[0]
     value = float(row[1])
     if key == 'SEED':
-        SEED = value
+        SEED = int(value)
+    elif key == 'NUM_RECEPTORS':
+        NUM_RECEPTORS = int(value)
     elif key == 'DOCK_MAX_AFFINITY':
-        DOCK_MAX_AFFINITY = value
+        DOCK_MAX_AFFINITY = float(value)
     elif key == 'DOCK_MIN_CLUSTER':
-        DOCK_MIN_CLUSTER = value
+        DOCK_MIN_CLUSTER = float(value)
     elif key == 'DOCK_MAX_HITS':
-        DOCK_MAX_HITS = value
+        DOCK_MAX_HITS = int(value)
     elif key == 'MD_TIME':
-        MD_TIME = value
+        MD_TIME = float(value)
     elif key == 'MMPBSA_TIME':
-        MMPBSA_TIME = value
+        MMPBSA_TIME = float(value)
     elif key == 'MMPBSA_STEP':
-        MMPBSA_STEP = value
+        MMPBSA_STEP = float(value)
     elif key == 'TOX_ENERGY_MAX':
-        TOX_ENERGY_MAX = value
+        TOX_ENERGY_MAX = float(value)
     elif key == 'TOX_DIST_MAX':
-        TOX_DIST_MAX = value
+        TOX_DIST_MAX = float(value)
     elif key == 'CRITICAL_X':
-        CRITICAL_X = value
+        CRITICAL_X = float(value)
     elif key == 'CRITICAL_Y':
-        CRITICAL_Y = value
+        CRITICAL_Y = float(value)
     elif key == 'CRITICAL_Z':
-        CRITICAL_Z = value
+        CRITICAL_Z = float(value)
 param_file.close()
 
-# Setup
+# Initialize random number generator
+random.seed(SEED)
 
-# Check that required command line arguments are provided
+# Check number of command line arguments provided
 if len(sys.argv) != 3:
     print 'Usage: %s chem_filename out_filename' % (sys.argv[0])
     sys.exit()
-
-# Read the command line arguments
+    
+# Assign command line arguments to variables
 chem_path = sys.argv[1]
 out_path = sys.argv[2]
 
@@ -133,37 +151,31 @@ if os.path.isfile(out_path):
     print 'File %s already exists' % out_path
     sys.exit()
 
-# Find the number of chemical structures
-num_chem = count_structs(chem_path)
-
-# Create the working directory
-#cmd = 'rm -rf %s' % WORKDIR
-#status = os.system(cmd)
-#if status != 0:
-#    print 'Command "%s" did not exit without errors' % cmd
-#    sys.exit()
+# Create working directory
 try:
     os.mkdir(WORKDIR)
 except OSError:
     print 'Error creating directory %s' % WORKDIR
     sys.exit()
 
-# Find the number and names of chemical structures
-lig_id_list = []
-lig_path_dict = {}
-lig_name_dict = {}
+# Count the number of chemical structures
 num_chem = count_structs(chem_path)
+
+# Find the names of the chemical structures
+lig_id_list = []
+lig_name_dict = {}
 for lig_id in xrange(0, num_chem):
     lig_id_list.append(lig_id)
     lig_name = get_struct_name(chem_path, lig_id + 1)
     lig_name_dict[lig_id] = lig_name
-    lig_path_dict[lig_id] = '/dev/null'
 
+# Find the number of receptors and their paths
 rec_id_list = []
 rec_path_dict = {}
 for rec_id in xrange(0, NUM_RECEPTORS):
     rec_id_list.append(rec_id)
-    rec_path_dict[rec_id] = 'data/hERG-conformations_%d.pdb' % rec_id
+    rec_filename = RECEP_NAME % (rec_id + 1)
+    rec_path_dict[rec_id] = '%s/%s' % (DATADIR, rec_filename)
 
 # Function to run an AutoDockTools script
 def runadt(cmd):
@@ -192,30 +204,26 @@ def runadt(cmd):
         sys.exit()
 
 def dock(lig_id, rec_id):
-    affinity = random.random() * -10
-    cluster_size = random.random()
-    #pose_path = '/dev/null'
-    success = True
     
     # Convert ligand from SDF to PDB
-    DOCKWORKDIR = WORKDIR + '/' + 'dock_lig%d_rec%d' % (lig_id, rec_id)
-    os.mkdir(DOCKWORKDIR)
-    os.chdir(DOCKWORKDIR)
+    dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
+    os.mkdir(dock_work_dir)
+    os.chdir(dock_work_dir)
     os.system('babel -f%d -l%d -isdf %s -opdb %s 2>/dev/null' % 
-            (lig_id + 1, lig_id + 1, chem_path, DOCKWORKDIR + '/' + 'lig.pdb'))
+            (lig_id + 1, lig_id + 1, chem_path, '%s/lig.pdb' % dock_work_dir))
     
     # Convert ligand from PDB to PDBQT
     runadt('prepare_ligand4.py -l %s -o %s' % 
-            (DOCKWORKDIR + '/' + 'lig.pdb', DOCKWORKDIR + '/' + 'lig.pdbqt'))
+            (dock_work_dir + '/' + 'lig.pdb', '%s/lig.pdbqt' % dock_work_dir))
     
     # Convert receptor from PDB to PDBQT
-    RECEPTOR_PATH = DATADIR + '/' + RECEP_NAME % (rec_id + 1)
+    receptor_path = rec_path_dict[rec_id]
     runadt('prepare_receptor4.py -r %s -o %s' %
-            (RECEPTOR_PATH, DOCKWORKDIR + '/' 'target.pdbqt'))
+            (receptor_path, '%s/target.pdbqt' % dock_work_dir))
     
     # Create docking input files (.gpf & .dpf)
-    shutil.copyfile(GPF, DOCKWORKDIR + '/' + 'grid.gpf')
-    shutil.copyfile(DPF, DOCKWORKDIR + '/' + 'dock.dpf')
+    shutil.copyfile(GPF, '%s/grid.gpf' % dock_work_dir)
+    shutil.copyfile(DPF, '%s/dock.gpf' % dock_work_dir)
     
     # Run AutoGrid
     os.system('%s -p %s -l grid.glg' % (AUTOGRID_EXE, GPF))
@@ -224,27 +232,31 @@ def dock(lig_id, rec_id):
     os.system('%s -p %s -l dock.dlg' % (AUTODOCK_EXE, DPF))
     
     #Get the best conformation
-    #Info is here: http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
+    #http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
     os.system("grep '^DOCKED' dock.dlg | cut -c9- | cut -c-66 > complex.pdb")
-    pose_path = DOCKWORKDIR + '/' + 'complex.pdb'
+    pose_path = dock_work_dir + '/' + 'complex.pdb'
     
     print 'Done dock for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
+    affinity = random.random() * -10
+    cluster_size = random.random()
+    success = True
     return success, affinity, cluster_size, pose_path
 
 def do_md(lig_id, rec_id, pose_path):
-    traj_path = '/dev/null'
-    success = True
     
     #Create MD working directory
-    MDWORKDIR = WORKDIR + '/' + 'md_lig%d_rec%d' % (lig_id, rec_id)
-    os.mkdir(MDWORKDIR)
-    os.chdir(MDWORKDIR)
+    md_work_dir = '%s/md_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
+    os.mkdir(md_work_dir)
+    os.chdir(md_work_dir)
     
     #Copy required files to MD directory
-    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'hit.prepin', MDWORKDIR + '/' + 'hit.prepin')
-    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'leap.in', MDWORKDIR + '/' + 'leap.in')
-    shutil.copyfile(PARAMDIR + '/' + 'amber' + '/' + 'common' + '/' + 'mopac.in', MDWORKDIR + '/' + 'mopac.in')
+    shutil.copyfile('%s/amber/common/hit.prepin' % PARAMDIR, 
+            '%s/hit.prepin' % md_work_dir)
+    shutil.copyfile('%s/amber/common/leap.in' % PARAMDIR, 
+            '%s/leap.in' % md_work_dir)
+    shutil.copyfile('%s/amber/common/mopac.in' % PARAMDIR, 
+            '%s/mopac.in' % md_work_dir)
     
     #Prepare system for MD using AmberTools
     #os.system('%s/antechamber -i hit.pdb -fi pdb -o hit.prepin -fo prepi -j 4  -s 2 -at gaff -c bcc -du y -s 2 -pf y -nc 1' % AMBER_BIN)
@@ -253,6 +265,8 @@ def do_md(lig_id, rec_id, pose_path):
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
+    traj_path = '/dev/null'
+    success = True
     return success, traj_path
 
 def do_mmpbsa(traj_id):
@@ -261,11 +275,9 @@ def do_mmpbsa(traj_id):
     success = True
     return success, energy, conformation
 
-def calc_distance(conformation):
+def get_distance(conformation):
     return random.random() * 10
 
-
-def get_distance(chem_name):
     cmd = 'babel -f 1 -l 1 -ipdbqt %s_out.pdbqt -opdb %s_out.pdb 2>/dev/null' \
             % (chem_name, chem_name)
     status = os.system(cmd)
@@ -291,25 +303,6 @@ def get_distance(chem_name):
     zd = numpy.mean(zs) - CRITICAL_Z
     distance = math.sqrt(xd * xd + yd * yd + zd * zd)
     return distance
-
-
-# Write final results to a file
-def write_results(final_result_list, out_filename):
-    if os.path.isfile(out_filename):
-        print 'File %s already exists' % out_filename
-        sys.exit()
-    try:
-        outfile = open(out_filename, 'w')
-    except IOError:
-        print 'Error opening %s' % out_filename
-        sys.exit()
-    outfile.write('Chemical Name,Energy,Distance,Prediction\n')
-    for result in final_result_list:
-        lig_id, energy, distance, prediction = result
-        lig_name = lig_name_dict[lig_id]
-        outfile.write('%s,%.1f,%.1f,%s\n' % (lig_name, energy, distance, prediction))
-    outfile.close()
-
 
 # Khaled's Toxicity Prediction Method
 def do_prediction(lig_id, rec_id_list):
@@ -358,7 +351,7 @@ def do_prediction(lig_id, rec_id_list):
 
     # STEP 5: Calculate energies and distances
     energy, conformation = mmpbsa_result_list[0]
-    distance = calc_distance(conformation)
+    distance = get_distance(conformation)
 
     # STEP 6: Assign blocker prediction
     if energy < TOX_ENERGY_MAX and distance < TOX_DIST_MAX:
@@ -368,23 +361,37 @@ def do_prediction(lig_id, rec_id_list):
         
     return (energy, distance, prediction)
 
-
-start = time.clock() 
+# Write final results to a file
+def write_results(final_result_list, out_filename):
+    if os.path.isfile(out_filename):
+        print 'File %s already exists' % out_filename
+        sys.exit()
+    try:
+        outfile = open(out_filename, 'w')
+    except IOError:
+        print 'Error opening %s' % out_filename
+        sys.exit()
+    outfile.write('Chemical Name,Energy,Distance,Prediction\n')
+    for result in final_result_list:
+        lig_id, energy, distance, prediction = result
+        lig_name = lig_name_dict[lig_id]
+        outfile.write('%s,%.1f,%.1f,%s\n' % (lig_name, energy, distance, prediction))
+    outfile.close()
 
 # Predict toxicity for each ligand
+start = time.clock() 
 final_result_list = []
 for lig_id in lig_id_list:
     energy, distance, prediction = do_prediction(lig_id, rec_id_list)
     final_result_list.append((lig_id, energy, distance, prediction))
-
 elapsed = time.clock()
 elapsed = elapsed - start
-print 'elapsed=%.2f sec' % elapsed
+print 'wall_time=%.2f sec' % elapsed
 
 # Output blocker predictions
 write_results(final_result_list, out_path)
 
 # Write DONE file
-done_path = out_path[0:-8] + '/DONE'
+done_path = '%s/DONE' % (out_path[0:-8])
 os.system('touch %s' % done_path)
 
