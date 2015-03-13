@@ -27,7 +27,7 @@ if not os.path.isdir(job_path):
     sys.exit()
 if os.path.isfile('%s/DONE' % job_path):
     print 'status=DONE'
-    print 'results_path/%s/out.csv' % job_path
+    print 'results_path=%s/out.csv' % job_path
 else:
     print 'status=RUNNING'
 
