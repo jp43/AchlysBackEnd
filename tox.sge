@@ -1,0 +1,6 @@
+#$ -N achlys
+#$ -q achlys.q
+#$ -l h_rt=24:00:00
+#$ -cwd
+#$ -S /bin/bash
+python ./tox.py chems.sdf out.csv

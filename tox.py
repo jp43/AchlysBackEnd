@@ -59,17 +59,28 @@ if hostname == 'turtle.local':
     MGLTOOLS_UTIL_PATH = '/Users/pwinter/Tools/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
     AUTOGRID_EXE = '/usr/local/bin/autogrid4'
     AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBERHOME = '/Users/pwinter/Tools/amber14'
     AMBER_BIN = '/Users/pwinter/Tools/amber14/bin'
     PARAMDIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/params'
     DATADIR = '/Users/pwinter/Achlys/git/AchlysBackEnd/data'
-elif hostanem == 'silence':
+elif hostname == 'silence':
     MGLTOOLS_PATH = '/usr/local/mgltools'
     MGLTOOLS_UTIL_PATH = '/usr/local/mgltools/MGLToolsPckgs/AutoDockTools/Utilities24'
     AUTOGRID_EXE = '/usr/local/bin/autogrid4'
     AUTODOCK_EXE = '/usr/local/bin/autodock4'
+    AMBERHOME = '/home/pwinter/amber14'
     AMBER_BIN = '/home/pwinter/amber14/bin'
     PARAMDIR = '/home/achlys/AchlysBackEnd/params'
     DATADIR = '/home/achlys/AchlysBackEnd/data'
+elif hostname.startswith('bl220-c'):
+    MGLTOOLS_PATH = '/opt/mgltools/1.5.4'
+    MGLTOOLS_UTIL_PATH = '/opt/mgltools/1.5.4/MGLToolsPckgs/AutoDockTools/Utilities24'
+    AUTOGRID_EXE = '/opt/autodock/4.2.3/bin/autogrid4'
+    AUTODOCK_EXE = '/opt/autodock/4.2.3/bin/autodock4'
+    AMBERHOME = '/pmshare/amber/amber12-20120918'
+    AMBER_BIN = '/pmshare/amber/amber12-20120918/bin'
+    PARAMDIR = '/nfs/r510-2/pwinter/achlys/AchlysBackEnd/params'
+    DATADIR = '/nfs/r510-2/pwinter/achlys/AchlysBackEnd/data'
 else:
     print 'Unsupported system'
     sys.exit()
@@ -210,7 +221,7 @@ def dock(lig_id, rec_id):
     os.mkdir(dock_work_dir)
     os.chdir(dock_work_dir)
     os.system('babel -f%d -l%d -isdf %s -opdb %s 2>/dev/null' % 
-            (lig_id + 1, lig_id + 1, chem_path, '%s/lig.pdb' % dock_work_dir))
+            (lig_id + 1, lig_id + 1, '%s/chems.sdf' % BASEDIR, '%s/lig.pdb' % dock_work_dir))
     
     # Convert ligand from PDB to PDBQT
     runadt('prepare_ligand4.py -l %s -o %s' % 
@@ -233,7 +244,23 @@ def dock(lig_id, rec_id):
     
     #Get the best conformation
     #http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
-    os.system("grep '^DOCKED' dock.dlg | cut -c9- | cut -c-66 > complex.pdb")
+    shutil.copyfile(receptor_path, 'complex.pdb')
+    complex_file = open('complex.pdb', 'a')
+    dock_dlg = open('dock.dlg')
+    for line in dock_dlg:
+        line = line.strip()
+        if not line.startswith('DOCKED'):
+            continue
+        line = line[8:]
+        line = line[0:66]
+        if line.startswith('TER'):
+            break
+        if not line.startswith('ATOM'):
+            continue
+        complex_file.write('%s\n' % line)
+    dock_dlg.close()
+    complex_file.close()
+            
     pose_path = dock_work_dir + '/' + 'complex.pdb'
     
     print 'Done dock for lig_id=%d rec_id=%d' % (lig_id, rec_id)
@@ -251,17 +278,16 @@ def do_md(lig_id, rec_id, pose_path):
     os.chdir(md_work_dir)
     
     #Copy required files to MD directory
-    shutil.copyfile('%s/amber/common/hit.prepin' % PARAMDIR, 
-            '%s/hit.prepin' % md_work_dir)
     shutil.copyfile('%s/amber/common/leap.in' % PARAMDIR, 
             '%s/leap.in' % md_work_dir)
-    shutil.copyfile('%s/amber/common/mopac.in' % PARAMDIR, 
-            '%s/mopac.in' % md_work_dir)
+    dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
+    shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/hit.pdb' % md_work_dir)
+    shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
     
     #Prepare system for MD using AmberTools
-    #os.system('%s/antechamber -i hit.pdb -fi pdb -o hit.prepin -fo prepi -j 4  -s 2 -at gaff -c bcc -du y -s 2 -pf y -nc 1' % AMBER_BIN)
-    #os.system('%s/parmchk -i hit.prepin -f prepi -o hit.frcmod' % AMBER_BIN)
-    #os.system('%s/tleap -f leap.in' % AMBER_BIN)
+    os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
+    os.system('export AMBERHOME=%s ; %s/parmchk -i lig.prepin -f prepi -o lig.frcmod' % (AMBERHOME, AMBER_BIN))
+    os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
@@ -388,10 +414,12 @@ elapsed = time.clock()
 elapsed = elapsed - start
 print 'wall_time=%.2f sec' % elapsed
 
+os.chdir(BASEDIR)
+
 # Output blocker predictions
 write_results(final_result_list, out_path)
 
 # Write DONE file
-done_path = '%s/DONE' % (out_path[0:-8])
+done_path = '%s/DONE' % (BASEDIR)
 os.system('touch %s' % done_path)
 

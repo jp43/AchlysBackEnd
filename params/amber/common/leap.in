@@ -1,9 +1,9 @@
 source leaprc.ff99SB
 #source leaprc.lipid11
 source leaprc.gaff
-loadamberprep hit.prepin
-loadamberparams hit.frcmod  
-p = loadPdb target-ligand.pdb
+loadamberprep lig.prepin
+loadamberparams lig.frcmod  
+p = loadPdb complex.pdb
 charge p
 bond p.995.SG p.397.SG
 bond p.907.SG p.230.SG

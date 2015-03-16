@@ -28,9 +28,9 @@ torsdof 14                           # torsional degrees of freedom
 rmstol 2.0                           # cluster_tolerance/A
 extnrg 1000.0                        # external grid energy
 e0max 0.0 10000                      # max initial energy; max number of retries
-ga_pop_size 35                       # number of individuals in population
-ga_num_evals 25                      # maximum number of energy evaluations
-ga_num_generations 4                 # maximum number of generations
+ga_pop_size 2                        # number of individuals in population
+ga_num_evals 2                       # maximum number of energy evaluations
+ga_num_generations 2                 # maximum number of generations
 ga_elitism 1                         # number of top individuals to survive to next generation
 ga_mutation_rate 0.02                # rate of gene mutation
 ga_crossover_rate 0.8                # rate of crossover
@@ -46,7 +46,7 @@ sw_lb_rho 0.01                       # lower bound on rho
 ls_search_freq 0.06                  # probability of performing local search on individual
 set_psw1                             # set the above pseudo-Solis & Wets parameters
 unbound_model bound                  # state of unbound ligand
-ga_run 100                           # do this many hybrid GA-LS runs
+ga_run 1                             # do this many hybrid GA-LS runs
 analysis                             # perform a ranked cluster analysis
 tstep 1.0                            # translation step/A
 qstep 20.0                           # quaternion step/deg

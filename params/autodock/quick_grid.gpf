@@ -1,6 +1,6 @@
-npts 16 10 16                        # num.grid points in xyz
+npts 8 5 8                           # num.grid points in xyz
 gridfld target.maps.fld              # grid_data_file
-spacing 1.904                        # spacing(A)
+spacing 3.808                        # spacing(A)
 receptor_types A C HD N NA OA SA     # receptor atom types
 ligand_types A S H C F I Cl NA OA N HD P SA     # ligand atom types
 receptor target.pdbqt                # macromolecule
