@@ -1,5 +1,4 @@
 source leaprc.ff99SB
-#source leaprc.lipid11
 source leaprc.gaff
 loadamberprep lig.prepin
 loadamberparams lig.frcmod  
@@ -14,7 +13,7 @@ bond p.797.SG p.801.SG
 bond p.32.SG p.36.SG
 bond p.542.SG p.546.SG
 solvatebox p TIP3PBOX 10
-addions p Na+ 148 Cl- 136
+#addions p Na+ 148 Cl- 136
 charge p
 saveAmberParm p start.prmtop start.inpcrd
 savepdb p start.pdb

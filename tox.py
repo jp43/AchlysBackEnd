@@ -79,8 +79,8 @@ elif hostname.startswith('bl220-c'):
     AUTODOCK_EXE = '/opt/autodock/4.2.3/bin/autodock4'
     AMBERHOME = '/pmshare/amber/amber12-20120918'
     AMBER_BIN = '/pmshare/amber/amber12-20120918/bin'
-    PARAMDIR = '/nfs/r510-2/pwinter/achlys/AchlysBackEnd/params'
-    DATADIR = '/nfs/r510-2/pwinter/achlys/AchlysBackEnd/data'
+    PARAMDIR = '//gluster/home/achlys/achlys/AchlysBackEnd/params'
+    DATADIR = '/gluster/home/achlys/achlys/AchlysBackEnd/data'
 else:
     print 'Unsupported system'
     sys.exit()
@@ -278,16 +278,19 @@ def do_md(lig_id, rec_id, pose_path):
     os.chdir(md_work_dir)
     
     #Copy required files to MD directory
-    shutil.copyfile('%s/amber/common/leap.in' % PARAMDIR, 
-            '%s/leap.in' % md_work_dir)
+    shutil.copyfile('%s/amber/common/leap.in' % PARAMDIR, '%s/leap.in' % md_work_dir)
+    shutil.copyfile('%s/namd/min/min.conf' % PARAMDIR, '%s/min.conf' % md_work_dir)
     dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
-    shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/hit.pdb' % md_work_dir)
+    shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/lig.pdb' % md_work_dir)
     shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
     
     #Prepare system for MD using AmberTools
     os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
     os.system('export AMBERHOME=%s ; %s/parmchk -i lig.prepin -f prepi -o lig.frcmod' % (AMBERHOME, AMBER_BIN))
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
+
+    #Do MD with namd
+    os.system('/opt/namd/2.9/bin/namd2 min.conf')
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
