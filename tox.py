@@ -278,8 +278,10 @@ def do_md(lig_id, rec_id, pose_path):
     os.chdir(md_work_dir)
     
     #Copy required files to MD directory
-    shutil.copyfile('%s/amber/common/leap.in' % PARAMDIR, '%s/leap.in' % md_work_dir)
-    shutil.copyfile('%s/namd/min/min.conf' % PARAMDIR, '%s/min.conf' % md_work_dir)
+    shutil.copyfile('%s/amber/leap.in' % PARAMDIR, '%s/leap.in' % md_work_dir)
+    shutil.copyfile('%s/namd/quick_min.conf' % PARAMDIR, '%s/min.conf' % md_work_dir)
+    shutil.copyfile('%s/namd/quick_heat.conf' % PARAMDIR, '%s/heat.conf' % md_work_dir)
+    shutil.copyfile('%s/namd/quick_eq.conf' % PARAMDIR, '%s/eq.conf' % md_work_dir)
     dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
     shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/lig.pdb' % md_work_dir)
     shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
