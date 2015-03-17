@@ -225,7 +225,7 @@ def dock(lig_id, rec_id):
     
     # Convert ligand from PDB to PDBQT
     runadt('prepare_ligand4.py -l %s -o %s' % 
-            (dock_work_dir + '/' + 'lig.pdb', '%s/lig.pdbqt' % dock_work_dir))
+            ('%s/lig.pdb' % dock_work_dir, '%s/lig.pdbqt' % dock_work_dir))
     
     # Convert receptor from PDB to PDBQT
     receptor_path = rec_path_dict[rec_id]
@@ -237,16 +237,18 @@ def dock(lig_id, rec_id):
     shutil.copyfile(DPF, '%s/dock.gpf' % dock_work_dir)
     
     # Run AutoGrid
-    os.system('%s -p %s -l grid.glg' % (AUTOGRID_EXE, GPF))
+    os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
     
     # Run AutoDock
-    os.system('%s -p %s -l dock.dlg' % (AUTODOCK_EXE, DPF))
+    os.system('%s -p %s -l dock.dlg 2>/dev/null' % (AUTODOCK_EXE, DPF))
     
     #Get the best conformation
     #http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
     shutil.copyfile(receptor_path, 'complex.pdb')
     complex_file = open('complex.pdb', 'a')
     dock_dlg = open('dock.dlg')
+    complex_file.write('TER\n')
+    atom_index = 16037
     for line in dock_dlg:
         line = line.strip()
         if not line.startswith('DOCKED'):
@@ -257,11 +259,15 @@ def dock(lig_id, rec_id):
             break
         if not line.startswith('ATOM'):
             continue
+        line = '%s%s%s' % (line[0:5], '%6d' % atom_index, line[11:])
         complex_file.write('%s\n' % line)
+        atom_index += 1
+    complex_file.write('END\n')
     dock_dlg.close()
     complex_file.close()
+    #os.system('babel -ipdb %s -opdb %s 2>/dev/null' % ('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % dock_work_dir))
             
-    pose_path = dock_work_dir + '/' + 'complex.pdb'
+    pose_path = '%s/complex.pdb' % dock_work_dir
     
     print 'Done dock for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
@@ -281,7 +287,7 @@ def do_md(lig_id, rec_id, pose_path):
     shutil.copyfile('%s/amber/leap.in' % PARAMDIR, '%s/leap.in' % md_work_dir)
     shutil.copyfile('%s/namd/quick_min.conf' % PARAMDIR, '%s/min.conf' % md_work_dir)
     shutil.copyfile('%s/namd/quick_heat.conf' % PARAMDIR, '%s/heat.conf' % md_work_dir)
-    shutil.copyfile('%s/namd/quick_equ.conf' % PARAMDIR, '%s/eqU.conf' % md_work_dir)
+    shutil.copyfile('%s/namd/quick_equ.conf' % PARAMDIR, '%s/equ.conf' % md_work_dir)
     dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
     shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/lig.pdb' % md_work_dir)
     shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
@@ -292,7 +298,7 @@ def do_md(lig_id, rec_id, pose_path):
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
 
     #Do MD with namd
-    os.system('/opt/namd/2.9/bin/namd2 min.conf')
+    #os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:$LD_LIBRARY_PATH ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf 2>/dev/null')
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
