@@ -298,7 +298,7 @@ def do_md(lig_id, rec_id, pose_path):
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
 
     #Do MD with namd
-    #os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:$LD_LIBRARY_PATH ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf 2>/dev/null')
+    os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:$LD_LIBRARY_PATH ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
