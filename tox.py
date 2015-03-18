@@ -96,13 +96,13 @@ DPF = '%s/autodock/quick_dock.dpf' % PARAMDIR
 # Default parameters for toxicity prediction method
 SEED = 754855
 NUM_RECEPTORS = 1
-DOCK_CENTER_X,6.861
-DOCK_CENTER_Y,8.825
-DOCK_CENTER_Z,2.155
-DOCK_BOX_X,23.8
-DOCK_BOX_Y,23.8
-DOCK_BOX_Z,23.8
-DOCK_SPACING,0.238
+DOCK_CENTER_X = 6.861
+DOCK_CENTER_Y = 8.825
+DOCK_CENTER_Z = 2.155
+DOCK_BOX_X = 23.8
+DOCK_BOX_Y = 23.8
+DOCK_BOX_Z = 23.8
+DOCK_SPACING = 0.238
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
 DOCK_MAX_HITS = 3
@@ -124,21 +124,21 @@ for row in param_reader:
     if key == 'SEED':
         SEED = int(value)
     elif key == 'NUM_RECEPTORS':
-        NUM_RECEPTORS = float(value)
+        NUM_RECEPTORS = int(value)
     elif key == 'DOCK_CENTER_X':
-        NUM_RECEPTORS = float(value)
+        DOCK_CENTER_X = float(value)
     elif key == 'DOCK_CENTER_Y':
-        NUM_RECEPTORS = float(value)
+        DOCK_CENTER_Y = float(value)
     elif key == 'DOCK_CENTER_Z':
-        NUM_RECEPTORS = float(value)
+        DOCK_CENTER_Z = float(value)
     elif key == 'DOCK_BOX_X':
-        NUM_RECEPTORS = float(value)
+        DOCK_BOX_X = float(value)
     elif key == 'DOCK_BOX_Y':
-        NUM_RECEPTORS = float(value)
+        DOCK_BOX_Y = float(value)
     elif key == 'DOCK_BOX_Z':
-        NUM_RECEPTORS = float(value)
+        DOCK_BOX_Z = float(value)
     elif key == 'DOCK_SPACING':
-        NUM_RECEPTORS = float(value)
+        DOCK_SPACING = float(value)
     elif key == 'DOCK_MAX_AFFINITY':
         DOCK_MAX_AFFINITY = float(value)
     elif key == 'DOCK_MIN_CLUSTER':
@@ -259,9 +259,19 @@ def dock(lig_id, rec_id):
     npts_x = int(round(DOCK_BOX_X / DOCK_SPACING))
     npts_y = int(round(DOCK_BOX_Y / DOCK_SPACING))
     npts_z = int(round(DOCK_BOX_Z / DOCK_SPACING))
-    runadt('prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.dpf -p npts="%d %d %d" -p gridcenter="%f %f %f" -p spacing=%f' %
+    runadt('prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.gpf -p npts="%d,%d,%d" -p gridcenter="%.3f,%.3f,%.3f" -p spacing=%.3f, -p ga_num_generations=27' %
             (npts_x, npts_y, npts_z, DOCK_CENTER_X, DOCK_CENTER_Y, DOCK_CENTER_Z, DOCK_SPACING))
-    runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o grid.dpf')
+    #Fix the .gpf problem (needs spaces not commas )
+    gpf_file = open('grid.gpf')
+    gpf_fixed_file = open('gridfixed.gpf', 'w')
+    for line in gpf_file:
+        if line.startswith('npts') or line.startswith('gridcenter'):
+            line = line.replace(',', ' ')
+        gpf_fixed_file.write(line)
+    gpf_file.close()
+    gpf_fixed_file.close()
+    os.system('mv gridfixed.gpf grid.gpf')
+    runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o dock.dpf')
     
     # Run AutoGrid
     os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
@@ -287,6 +297,8 @@ def dock(lig_id, rec_id):
             continue
         line = line[8:]
         line = line[0:66]
+        line = 'HETATM' + line[6:]
+        line = line[0:22] + 'X' + line[22:]
         if line.startswith('TER'):
             break
         if not line.startswith('ATOM'):
