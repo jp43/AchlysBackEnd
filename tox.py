@@ -96,6 +96,13 @@ DPF = '%s/autodock/quick_dock.dpf' % PARAMDIR
 # Default parameters for toxicity prediction method
 SEED = 754855
 NUM_RECEPTORS = 1
+DOCK_CENTER_X,6.861
+DOCK_CENTER_Y,8.825
+DOCK_CENTER_Z,2.155
+DOCK_BOX_X,23.8
+DOCK_BOX_Y,23.8
+DOCK_BOX_Z,23.8
+DOCK_SPACING,0.238
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
 DOCK_MAX_HITS = 3
@@ -117,7 +124,21 @@ for row in param_reader:
     if key == 'SEED':
         SEED = int(value)
     elif key == 'NUM_RECEPTORS':
-        NUM_RECEPTORS = int(value)
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_CENTER_X':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_CENTER_Y':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_CENTER_Z':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_BOX_X':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_BOX_Y':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_BOX_Z':
+        NUM_RECEPTORS = float(value)
+    elif key == 'DOCK_SPACING':
+        NUM_RECEPTORS = float(value)
     elif key == 'DOCK_MAX_AFFINITY':
         DOCK_MAX_AFFINITY = float(value)
     elif key == 'DOCK_MIN_CLUSTER':
@@ -233,8 +254,14 @@ def dock(lig_id, rec_id):
             (receptor_path, '%s/target.pdbqt' % dock_work_dir))
     
     # Create docking input files (.gpf & .dpf)
-    shutil.copyfile(GPF, '%s/grid.gpf' % dock_work_dir)
-    shutil.copyfile(DPF, '%s/dock.gpf' % dock_work_dir)
+    #shutil.copyfile(GPF, '%s/grid.gpf' % dock_work_dir)
+    #shutil.copyfile(DPF, '%s/dock.gpf' % dock_work_dir)
+    npts_x = int(round(DOCK_BOX_X / DOCK_SPACING))
+    npts_y = int(round(DOCK_BOX_Y / DOCK_SPACING))
+    npts_z = int(round(DOCK_BOX_Z / DOCK_SPACING))
+    runadt('prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.dpf -p npts="%d %d %d" -p gridcenter="%f %f %f" -p spacing=%f' %
+            (npts_x, npts_y, npts_z, DOCK_CENTER_X, DOCK_CENTER_Y, DOCK_CENTER_Z, DOCK_SPACING))
+    runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o grid.dpf')
     
     # Run AutoGrid
     os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
@@ -244,11 +271,16 @@ def dock(lig_id, rec_id):
     
     #Get the best conformation
     #http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
-    shutil.copyfile(receptor_path, 'complex.pdb')
-    complex_file = open('complex.pdb', 'a')
+    complex_file = open('complex.pdb', 'w')
+    receptor_file = open(receptor_path)
+    for line in receptor_file:
+        if line.startswith('ATOM') or line.startswith('HETATM') or line.startswith('TER'):
+            complex_file.write(line)
+        if line.startswith('ATOM') or line.startswith('HETATM'):
+            serial = int(line[6:11])
     dock_dlg = open('dock.dlg')
     complex_file.write('TER\n')
-    atom_index = 16037
+    atom_index = serial + 1
     for line in dock_dlg:
         line = line.strip()
         if not line.startswith('DOCKED'):
@@ -298,7 +330,7 @@ def do_md(lig_id, rec_id, pose_path):
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
 
     #Do MD with namd
-    os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:$LD_LIBRARY_PATH ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
+    os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mpirt/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/../compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/lib/intel64:/opt/intel/mic/coi/host-linux-release/lib:/opt/intel/mic/myo/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mkl/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/tbb/lib/intel64/gcc4.4 ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
