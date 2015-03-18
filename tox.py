@@ -259,7 +259,7 @@ def dock(lig_id, rec_id):
     npts_x = int(round(DOCK_BOX_X / DOCK_SPACING))
     npts_y = int(round(DOCK_BOX_Y / DOCK_SPACING))
     npts_z = int(round(DOCK_BOX_Z / DOCK_SPACING))
-    runadt('prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.gpf -p npts="%d,%d,%d" -p gridcenter="%.3f,%.3f,%.3f" -p spacing=%.3f, -p ga_num_generations=27' %
+    runadt('prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.gpf -p npts="%d,%d,%d" -p gridcenter="%.3f,%.3f,%.3f" -p spacing=%.3f' %
             (npts_x, npts_y, npts_z, DOCK_CENTER_X, DOCK_CENTER_Y, DOCK_CENTER_Z, DOCK_SPACING))
     #Fix the .gpf problem (needs spaces not commas )
     gpf_file = open('grid.gpf')
@@ -271,7 +271,7 @@ def dock(lig_id, rec_id):
     gpf_file.close()
     gpf_fixed_file.close()
     os.system('mv gridfixed.gpf grid.gpf')
-    runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o dock.dpf')
+    runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o dock.dpf -p ga_num_generations=27 -p ga_num_evals=2500')
     
     # Run AutoGrid
     os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
