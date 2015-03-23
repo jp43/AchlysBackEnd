@@ -79,7 +79,7 @@ elif hostname.startswith('bl220-c'):
     AUTODOCK_EXE = '/opt/autodock/4.2.3/bin/autodock4'
     AMBERHOME = '/pmshare/amber/amber12-20120918'
     AMBER_BIN = '/pmshare/amber/amber12-20120918/bin'
-    PARAMDIR = '//gluster/home/achlys/achlys/AchlysBackEnd/params'
+    PARAMDIR = '/gluster/home/achlys/achlys/AchlysBackEnd/params'
     DATADIR = '/gluster/home/achlys/achlys/AchlysBackEnd/data'
 else:
     print 'Unsupported system'
@@ -340,6 +340,20 @@ def do_md(lig_id, rec_id, pose_path):
     os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
     os.system('export AMBERHOME=%s ; %s/parmchk -i lig.prepin -f prepi -o lig.frcmod' % (AMBERHOME, AMBER_BIN))
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
+    
+    #Create ref-heat file
+    complex_file = open('complex.pdb')
+    refheat_file = open('ref-heat.pdb', 'w')
+    for line in complex_file:
+        if line.startswith('ATOM'):
+            if line[12:16].strip() in ['CA', 'N', 'O']:
+                line = line[0:30] + '%8.3f' % 50.0 + line[38:]
+            else:
+                line = line[0:30] + '%8.3f' % 0.0 + line[38:]
+            line = line[0:38] + '%8.3f' % 0.0 + '%8.3f' % 0.0 + line[55:]
+        refheat_file.write(line)
+    complex_file.close()
+    refheat_file.close()
 
     #Do MD with namd
     os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mpirt/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/../compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/lib/intel64:/opt/intel/mic/coi/host-linux-release/lib:/opt/intel/mic/myo/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mkl/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/tbb/lib/intel64/gcc4.4 ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
