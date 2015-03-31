@@ -289,23 +289,23 @@ def dock(lig_id, rec_id):
         if line.startswith('ATOM') or line.startswith('HETATM'):
             serial = int(line[6:11])
     dock_dlg = open('dock.dlg')
-    complex_file.write('TER\n')
     atom_index = serial + 1
     for line in dock_dlg:
         line = line.strip()
         if not line.startswith('DOCKED'):
             continue
         line = line[8:]
-        line = line[0:66]
-        line = 'HETATM' + line[6:]
-        line = line[0:22] + 'X' + line[22:]
         if line.startswith('TER'):
             break
         if not line.startswith('ATOM'):
             continue
-        line = '%s%s%s' % (line[0:5], '%6d' % atom_index, line[11:])
+        line = line[0:66]
+        line = 'HETATM' + line[6:]
+        line = line[0:21] + 'X' + line[22:]
+        line = '%s%6d%s' % (line[0:6], atom_index, line[11:])
         complex_file.write('%s\n' % line)
         atom_index += 1
+    complex_file.write('TER\n')
     complex_file.write('END\n')
     dock_dlg.close()
     complex_file.close()
