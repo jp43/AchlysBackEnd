@@ -6,8 +6,9 @@ import subprocess
 import shutil
 import argparse
 import warnings
-import uuid
 import ConfigParser
+
+from achlys.kernel import docking
 
 known_formats = ['.pdb', '.sdf']
 known_systems = ['herg']
@@ -18,6 +19,7 @@ class AchlysError(Exception):
 class AchlysProgram(object):
 
     def initialize(self, args):
+
         global known_systems
 
         config = ConfigParser.SafeConfigParser()
@@ -61,7 +63,8 @@ class AchlysProgram(object):
                 if system not in known_systems:
                     raise AchlysError("The system specified in the configuration file should one of " + ", ".join(known_systems))
                 if system == 'herg':
-                    dir_r = '/gluster/home/preto/hERG_PDB'
+                    achlysdir = os.path.realpath(docking.__file__)
+                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
                     input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
                     ntargets = len(input_files_r)
             else:
@@ -78,17 +81,19 @@ class AchlysProgram(object):
         os.mkdir(workdir)
 
         self.workdir = workdir
+        curdir = os.getcwd()
 
         # copying required files
         for idx, file_l in enumerate(input_files_l):
-            os.mkdir(workdir+'/lig%i'%idx)
+            ligdir = workdir+'/lig%i'%idx
+            os.mkdir(ligdir)
 
             # copying the files containing the ligands
-            shutil.copyfile(file_l, workdir+'/lig%i/lig.pdb'%idx)
-
+            shutil.copyfile(file_l, ligdir + '/lig.pdb')
+            
             # copying the files containing the targets
             for jdx, file_r in enumerate(input_files_r):
-                os.mkdir(workdir+'/lig%i/target%i'%(idx,jdx))
+                os.mkdir(workdir + '/lig%i/target%i'%(idx,jdx))
                 shutil.copyfile(file_r, workdir + '/lig%i/target%i/target.pdb'%(idx,jdx))
 
     def create_arg_parser(self):
@@ -104,7 +109,7 @@ class AchlysProgram(object):
             type=str,
             dest='input_files_r',
             nargs='*',
-            help = 'Receptor coordinate file(s): .pdb, .sdf')
+            help = 'Receptor coordinate file(s): .pdb')
  
         parser.add_argument('-n',
             type=int,
@@ -136,18 +141,18 @@ class AchlysProgram(object):
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q serial.q
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
 #$ -V
-#$ -o /dev/null
-#$ -e /dev/null
+##$ -o /dev/null
+##$ -e /dev/null
 #$ -cwd
 #$ -S /bin/bash
 
 set -e
 
-run_docking.py $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file)s %(multi_flag)s
+run_docking $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file)s %(multi_flag)s
 """% locals()
             file.write(script)
 
@@ -164,7 +169,8 @@ run_docking.py $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_f
 #$ -S /bin/bash
 
 set -e
-post_docking.py $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file)s
+
+postdocking %(ntargets)s -f %(config_file)s
 """% locals()
             file.write(script)
 
@@ -195,17 +201,17 @@ post_docking.py $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_
             for idx in range(self.nligs): # submit one array job per ligand
                 rundir = self.workdir + '/lig%i'%idx
                 shutil.copyfile(args.config_file, rundir + '/' + args.config_file)
-                os.chdir(rundir)
 
+                os.chdir(rundir)
                 # (A) submit docking script
-                script_name = 'run_docking_lig%i.sge'%idx
+                script_name = 'run_docking.sge'
                 self.write_docking_job_array(script_name, self.ntargets, self.nligs, self.ntargets, args.config_file, multi=True)
 
                 jobid = subprocess.check_output(['qsub', '-terse', script_name])
                 jobid = jobid.split('.')[0]
 
                 # (B) submit postdocking script
-                script_name = 'post_docking_lig%i.sge'%idx
+                script_name = 'post_docking.sge'
                 self.write_post_docking_script(script_name, self.nligs, self.nligs, self.ntargets, args.config_file)
 
                 subprocess.call(['qsub', '-hold_jid', jobid, script_name])
@@ -225,5 +231,3 @@ post_docking.py $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_
             self.write_docking_job_array(script_name, ncpus, self.nligs, self.ntargets, args.config_file) 
             subprocess.call("qsub " + script_name, shell=True)
 
-if __name__=='__main__':
-    AchlysProgram().run()
