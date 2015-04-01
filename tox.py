@@ -21,7 +21,7 @@ def count_structs(chem_filename):
     in_data = False
     header_line_num = 0
     HEADER_LINES = 4
-    sdfile = open(sys.argv[1])
+    sdfile = open(chem_filename)
     for line in sdfile:
         line = line.rstrip()
         if in_mol:
