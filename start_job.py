@@ -22,12 +22,14 @@ if not os.path.isfile(chem_path):
 hostname = socket.gethostname()
 if hostname == 'turtle.local':
     job_base_path = '/Users/pwinter/Achlys/JOBS'
-    tox_script_path = '/Users/pwinter/Achlys/git/AchlysBackEnd/tox.py'
+    tox_script_path = '/Users/pwinter/Achlys/git/AchlysBackEnd/achlys/kernel/tox.py'
     tox_sge_path = '/Users/pwinter/Achlys/git/AchlysBackEnd/tox.sge'
+    tox_ini_path = '/Users/pwinter/Achlys/git/AchlysBackEnd/examples/config_PW.ini'
 elif hostname == 'silence':
     job_base_path = '/home/achlys/JOBS'
-    tox_script_path = '/home/achlys/AchlysBackEnd/tox.py'
+    tox_script_path = '/home/achlys/AchlysBackEnd/achlys/kernel/tox.py'
     tox_sge_path = '/home/achlys/AchlysBackEnd/tox.sge'
+    tox_ini_path = '/home/achlys/AchlysBackEnd/examples/config_PW.ini'
 else:
     print 'Unsupported system'
     sys.exit()
@@ -52,6 +54,7 @@ elif TARGET_SYSTEM == 'px':
     os.system('scp %s %s:%s/chems.sdf' % (chem_path, REMOTE_USER, job_path))
     os.system('scp %s %s:%s' % (tox_script_path, REMOTE_USER, job_path))
     os.system('scp %s %s:%s' % (tox_sge_path, REMOTE_USER, job_path))
+    os.system('scp %s %s:%s' % (tox_ini_path, REMOTE_USER, job_path))
     os.system('ssh %s "cd %s ; qsub tox.sge"' % (REMOTE_USER, job_path))
 
 else:
