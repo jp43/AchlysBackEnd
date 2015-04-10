@@ -10,6 +10,8 @@ import argparse
 import ConfigParser
 import numpy as np
 
+from achlys.kernel import docking
+
 class PostDocking(object):
 
     def __init__(self, args):
@@ -17,28 +19,32 @@ class PostDocking(object):
         self.ntargets = args.ntargets
         self.free_energy = np.zeros(self.ntargets)
 
+        self.config = docking.DockingConfig(args.config_file)
+        self.nposes = self.config.nposes
+
+        if self.nposes < self.ntarget:
+            raise docking.DockingConfigError("The number of final poses is larger than the total number of targets")
+
     def run(self):
 
         curdir = os.getcwd()
-        shutil.rmtree('md', ignore_errors=True)
-        os.mkdir('md')
         for idx in range(self.ntargets):
             with open('target%i/free_energy.txt'%idx, 'r') as fefile:
                 line = fefile.next().replace('\n','')
                 self.free_energy[idx] = float(line)
 
         idxs_pose = np.argsort(self.free_energy)
-        idxs_pose = idxs_pose[:7]
+        idxs_pose = idxs_pose[:self.config.nposes]
         np.savetxt('poses.txt', idxs_pose) # save indices of poses
 
         for idx, jdx in enumerate(idxs_pose):
-            posedir = 'md/pose%i'%idx
-            os.mkdir(posedir)
+            startdir = 'md-pose%i/startup'%idx
+            os.makedirs(startdir)
 
-            shutil.copyfile('target%i/pose.pdb'%jdx, posedir+'/pose.pdb')
-            shutil.copyfile('target%i/target.pdb'%jdx, posedir+'/target.pdb')
+            shutil.copyfile('target%i/pose.pdb'%jdx, startdir+'/pose.pdb')
+            shutil.copyfile('target%i/target.pdb'%jdx, startdir+'/target.pdb')
 
-            os.chdir(posedir)
+            os.chdir(startdir)
             # remove hydrogens from target.pdb
             subprocess.call('babel -ipdb target.pdb -opdb target_ha.pdb -d', shell=True)
 
@@ -114,5 +120,5 @@ class PostDockingExe(object):
 
         parser = self.create_arg_parser()
         args = parser.parse_args()
-             
+     
         PostDocking(args).run()

@@ -72,8 +72,10 @@ except AttributeError:
 
 setup(name='Achlys',
       packages=['achlys', 'achlys.kernel'],
-      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/*.pdb')])],
-      scripts = ['bin/tox', 'bin/postdocking', 'bin/run_docking', 'bin/run_md'],
+      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/*.pdb')]), 
+          ('share/params/amber', ['params/amber/leap.in']),
+          ('share/params/namd', ['params/namd/' + file for file in ['min.conf', 'heat.conf', 'equ.conf']])],
+      scripts = ['bin/tox', 'bin/postdocking', 'bin/run_docking', 'bin/run_md', 'bin/run_mmpbsa', 'bin/run_analysis'],
       license='LICENSE.txt',
       description='AchlysBackEnd package',
       long_description=open('README.md').read(),

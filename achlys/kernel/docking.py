@@ -16,10 +16,10 @@ class DockingConfigError(Exception):
 
 class DockingConfig(object):
 
-    def __init__(self, args):
+    def __init__(self, config_file):
 
         config = ConfigParser.SafeConfigParser()
-        config.read(args.config_file)
+        config.read(config_file)
 
         if config.has_option('DOCKING', 'program'):
             program = config.get('DOCKING', 'program').lower()
@@ -28,7 +28,7 @@ class DockingConfig(object):
             self.program = program
         else:
             self.program = 'autodock'
-         
+
         if self.program == 'autodock':
             # check autogrid options
             if config.has_section('AUTOGRID'):
@@ -47,6 +47,11 @@ class DockingConfig(object):
                 self.vina_options = dict(config.items('VINA'))
             else:
                 self.vina_options = {}
+
+        if config.has_option('DOCKING', 'nposes'):
+            self.nposes  = config.getint('DOCKING', 'nposes') 
+        else:
+            self.nposes = 7
 
 class DockingWorker(object):
 
@@ -213,8 +218,8 @@ vina --config vina.config &>> vina.out"""% locals()
         parser = self.create_arg_parser()
         args = parser.parse_args()    
 
-        config = DockingConfig(args)
-
+        config = DockingConfig(args.config_file)
+ 
         ncpus = args.ncpus
         cpu_id = args.cpu_id
         nligs = args.nligs
