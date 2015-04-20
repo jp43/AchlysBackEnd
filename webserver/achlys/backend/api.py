@@ -78,13 +78,6 @@ def checkjob(request):
             is_error = True
         else:
             results_path = text.strip()[13:]
-            #try:
-            #    results_file = open(results_path)
-            #except IOError:
-            #    is_error = True
-            #if not is_error:
-            #    results_json = results_to_json(results_file)
-            #    results_file.close()
             try:
                 results_file = open(results_path)
             except IOError:

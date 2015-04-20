@@ -1,4 +1,0 @@
-O=C(C)N[C@H]1CCC2=CC(OC)=C(OC)C(OC)=C2C3=CC=C(OC)C(C=C13)=O Colchicine
-COC1=C2C(CC[C@H](NC(C)=O)C3=CC(C(SC)=CC=C23)=O)=CC(OC)=C1OC Thiocolchicine
-CC(N[C@H]1CCC2=CC(O[C@H]3[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O3)=C(OC)C(OC)=C2C4=CC=C(SC)C(C=C14)=O)=O Thiocolchicoside
-CCOC(C=C1CC[C@H](NC(OC)=O)C2=CC3=O)=C(C(OC)=C1C2=CC=C3SC)OC CCI-001
