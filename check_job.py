@@ -73,14 +73,26 @@ elif TARGET_SYSTEM == 'px':
             print 'status=DONE'
             local_job_path = '%s/%d' % (local_job_base_path, job_id)
             if os.path.isdir(local_job_path):
-                print 'local_job_path already exists'
-                sys.exit()
-            os.mkdir(local_job_path)
+                pass
+                #print 'local_job_path already exists'
+                #sys.exit()
+            else:
+                os.mkdir(local_job_path)
             os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
             print 'results_path=%s/out.csv' % local_job_path
         else:
             print 'status=RUNNING'
-    
+            cmd = 'ssh %s "[ -f %s/out.csv ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+            if pipetext(cmd).strip() == 'Found':
+                local_job_path = '%s/%d' % (local_job_base_path, job_id)
+                if os.path.isdir(local_job_path):
+                    pass
+                    #print 'local_job_path already exists'
+                    #sys.exit()
+                else:
+                    os.mkdir(local_job_path)
+                os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+                print 'results_path=%s/out.csv' % local_job_path
 else:
 
     print 'Unsupported system'

@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 from __future__ import with_statement
 
 import sys
@@ -18,10 +16,10 @@ class DockingConfigError(Exception):
 
 class DockingConfig(object):
 
-    def __init__(self, args):
+    def __init__(self, config_file):
 
         config = ConfigParser.SafeConfigParser()
-        config.read(args.config_file)
+        config.read(config_file)
 
         if config.has_option('DOCKING', 'program'):
             program = config.get('DOCKING', 'program').lower()
@@ -30,7 +28,7 @@ class DockingConfig(object):
             self.program = program
         else:
             self.program = 'autodock'
-         
+
         if self.program == 'autodock':
             # check autogrid options
             if config.has_section('AUTOGRID'):
@@ -49,6 +47,11 @@ class DockingConfig(object):
                 self.vina_options = dict(config.items('VINA'))
             else:
                 self.vina_options = {}
+
+        if config.has_option('DOCKING', 'nposes'):
+            self.nposes  = config.getint('DOCKING', 'nposes') 
+        else:
+            self.nposes = 7
 
 class DockingWorker(object):
 
@@ -120,15 +123,16 @@ class DockingWorker(object):
                 script ="""#!%(shebang)s
 
 set -e
-# prepare receptor
+# generate .pdbqt files
+prepare_ligand4.py -l ../lig.pdb -o lig.pdbqt
 prepare_receptor4.py -r target.pdb -o target.pdbqt
 
 # run autogrid
-prepare_gpf4.py -l ../lig.pdbqt -r target.pdbqt -o grid.gpf %(autogrid_options_flag)s
+prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.gpf %(autogrid_options_flag)s
 autogrid4 -p grid.gpf -l grid.glg
 
 # run autodock
-prepare_dpf4.py -l ../lig.pdbqt -r target.pbdqt -o dock.dpf -p move=../lig.pdbqt %(autodock_options_flag)s
+prepare_dpf4.py -l lig.pdbqt -r target.pbdqt -o dock.dpf -p move=lig.pdbqt %(autodock_options_flag)s
 autodock4 -p dock.dpf -l dock.dlg"""% locals()
                 file.write(script)
 
@@ -137,7 +141,7 @@ autodock4 -p dock.dpf -l dock.dlg"""% locals()
             # write vina config file
             with open('vina.config', 'w') as config_file:
                 print >> config_file, 'receptor = target.pdbqt'
-                print >> config_file, 'ligand = ../lig.pdbqt'
+                print >> config_file, 'ligand = lig.pdbqt'
                 for key in config.vina_options.keys():
                     print >> config_file, key + ' = ' + config.vina_options[key]
 
@@ -145,7 +149,8 @@ autodock4 -p dock.dpf -l dock.dlg"""% locals()
             with open(script_name, 'w') as file:
                 script ="""#!%(shebang)s
 
-# prepare receptor
+# generate .pdbqt files
+prepare_ligand4.py -l ../lig.pdb -o lig.pdbqt
 prepare_receptor4.py -r target.pdb -o target.pdbqt
 
 # run vina
@@ -213,8 +218,8 @@ vina --config vina.config &>> vina.out"""% locals()
         parser = self.create_arg_parser()
         args = parser.parse_args()    
 
-        config = DockingConfig(args)
-
+        config = DockingConfig(args.config_file)
+ 
         ncpus = args.ncpus
         cpu_id = args.cpu_id
         nligs = args.nligs
@@ -229,8 +234,6 @@ vina --config vina.config &>> vina.out"""% locals()
             if ntargets != ncpus:
                 raise ValueError("The number of targets should be equal to the number of CPUs")
             # prepare the ligand
-            if config.program in ['autodock', 'vina']:
-                subprocess.call("prepare_ligand4.py -l lig.pdb -o lig.pdbqt", shell=True)
             os.chdir('target%i'%cpu_id)
             # run docking
             self.run_docking(config)
@@ -241,8 +244,6 @@ vina --config vina.config &>> vina.out"""% locals()
             for idx in idxs_lig:
                os.chdir('lig%i'%idx)
                # prepare the ligand
-               if config.program in ['autodock', 'vina']:
-                   subprocess.call("prepare_ligand4.py -l lig.pdb -o lig.pdbqt", shell=True)
                for jdx in range(ntargets):
                   os.chdir('target%i'%jdx)
                   # run docking
@@ -251,5 +252,3 @@ vina --config vina.config &>> vina.out"""% locals()
                   os.chdir('..')
                os.chdir(curdir)
 
-if __name__=='__main__':
-    DockingWorker().run()
