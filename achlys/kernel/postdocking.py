@@ -22,7 +22,7 @@ class PostDocking(object):
         self.config = docking.DockingConfig(args.config_file)
         self.nposes = self.config.nposes
 
-        if self.nposes < self.ntarget:
+        if self.nposes > self.ntargets:
             raise docking.DockingConfigError("The number of final poses is larger than the total number of targets")
 
     def run(self):

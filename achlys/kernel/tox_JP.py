@@ -71,8 +71,6 @@ class AchlysProgram(object):
             else:
                 raise AchlysError('No files for targets provided')
 
-        self.system = system
- 
         self.ntargets = ntargets
         self.ext_l = ext_l
         if ntargets == 1 and args.multi:
