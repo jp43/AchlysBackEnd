@@ -93,6 +93,9 @@ elif TARGET_SYSTEM == 'px':
                     os.mkdir(local_job_path)
                 os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
                 print 'results_path=%s/out.csv' % local_job_path
+            else:
+                print 'results_path=NORESULTS'
+
 else:
 
     print 'Unsupported system'

@@ -18,6 +18,48 @@ python /gluster/home/achlys/achlys/bin/tox \
     -r /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_01.pdb \
     /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_02.pdb \
     /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_03.pdb \
-    -n 64 \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_04.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_05.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_06.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_07.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_08.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_09.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_10.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_11.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_12.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_13.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_14.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_15.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_16.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_17.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_18.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_19.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_20.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_21.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_22.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_23.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_24.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_25.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_26.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_27.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_28.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_29.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_30.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_31.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_32.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_33.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_34.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_35.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_36.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_37.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_38.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_39.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_40.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_41.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_42.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_43.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_44.pdb \
+    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_45.pdb \
+    -n 8 \
     --multi \
     -f config_PW.ini
