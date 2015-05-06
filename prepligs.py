@@ -1,4 +1,4 @@
-import sys, os
+import sys, os, shutil
 
 # Function to count the structures in an SDF file
 def count_structs_sdf(chem_filename):
@@ -67,16 +67,18 @@ else:
 
 num_structs = count_structs_sdf('processed.sdf')
 
+shutil.copy('processed.sdf', 'chems.sdf')
+
 os.system('mkdir pdb')
 
 for i in xrange(0, num_structs):
-    os.system('babel -isdf processed.sdf -opdb pdb/chem%d.pdb' % i)
+    os.system('babel -isdf processed.sdf -f%d -l%d -opdb pdb/chem%d.pdb' % (i+1, i+1, i))
 
 # Output PNG files
 
-os.system('mkdir png')
-
-for i in xrange(0, num_structs):
-    os.system('babel -isdf processed.sdf -opng png/chem%d.png' % i)
+#os.system('mkdir png')
+#
+#for i in xrange(0, num_structs):
+#    os.system('/pmshare/apps/openbabel-2.3.2/bin/babel -isdf processed.sdf -f%d -l%d -opng png/chem%d.png' % (i+1, i+1, i))
 
 

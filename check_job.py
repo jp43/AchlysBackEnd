@@ -79,6 +79,10 @@ elif TARGET_SYSTEM == 'px':
             else:
                 os.mkdir(local_job_path)
             os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+            os.system('mkdir -p %s/PDB' % local_job_path)
+            os.system('scp %s:%s/pdb/chem*.pdb %s/PDB/' % (REMOTE_USER, job_path, local_job_path))
+            #os.system('mkdir -p %s/PNG' % local_job_path)
+            #os.system('scp %s:%s/png/chem*.png %s/PNG/' % (REMOTE_USER, job_path, local_job_path))
             print 'results_path=%s/out.csv' % local_job_path
         else:
             print 'status=RUNNING'

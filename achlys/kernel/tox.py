@@ -72,7 +72,7 @@ elif hostname == 'silence':
     AMBER_BIN = '/home/pwinter/amber14/bin'
     PARAMDIR = '/home/achlys/AchlysBackEnd/params'
     DATADIR = '/home/achlys/AchlysBackEnd/data'
-elif hostname.startswith('bl220-c'):
+elif hostname.startswith('bl220-c') or hostname in ['head01', 'head02']:
     MGLTOOLS_PATH = '/opt/mgltools/1.5.4'
     MGLTOOLS_UTIL_PATH = '/opt/mgltools/1.5.4/MGLToolsPckgs/AutoDockTools/Utilities24'
     AUTOGRID_EXE = '/opt/autodock/4.2.3/bin/autogrid4'
@@ -116,52 +116,52 @@ CRITICAL_Y = 8.825
 CRITICAL_Z = 2.155
 
 # Load parameters from parameter file
-param_file = open('%s/%s' % (PARAMDIR, PARAMFILE), 'rU')
-param_reader = csv.reader(param_file)
-for row in param_reader:
-    key = row[0]
-    value = float(row[1])
-    if key == 'SEED':
-        SEED = int(value)
-    elif key == 'NUM_RECEPTORS':
-        NUM_RECEPTORS = int(value)
-    elif key == 'DOCK_CENTER_X':
-        DOCK_CENTER_X = float(value)
-    elif key == 'DOCK_CENTER_Y':
-        DOCK_CENTER_Y = float(value)
-    elif key == 'DOCK_CENTER_Z':
-        DOCK_CENTER_Z = float(value)
-    elif key == 'DOCK_BOX_X':
-        DOCK_BOX_X = float(value)
-    elif key == 'DOCK_BOX_Y':
-        DOCK_BOX_Y = float(value)
-    elif key == 'DOCK_BOX_Z':
-        DOCK_BOX_Z = float(value)
-    elif key == 'DOCK_SPACING':
-        DOCK_SPACING = float(value)
-    elif key == 'DOCK_MAX_AFFINITY':
-        DOCK_MAX_AFFINITY = float(value)
-    elif key == 'DOCK_MIN_CLUSTER':
-        DOCK_MIN_CLUSTER = float(value)
-    elif key == 'DOCK_MAX_HITS':
-        DOCK_MAX_HITS = int(value)
-    elif key == 'MD_TIME':
-        MD_TIME = float(value)
-    elif key == 'MMPBSA_TIME':
-        MMPBSA_TIME = float(value)
-    elif key == 'MMPBSA_STEP':
-        MMPBSA_STEP = float(value)
-    elif key == 'TOX_ENERGY_MAX':
-        TOX_ENERGY_MAX = float(value)
-    elif key == 'TOX_DIST_MAX':
-        TOX_DIST_MAX = float(value)
-    elif key == 'CRITICAL_X':
-        CRITICAL_X = float(value)
-    elif key == 'CRITICAL_Y':
-        CRITICAL_Y = float(value)
-    elif key == 'CRITICAL_Z':
-        CRITICAL_Z = float(value)
-param_file.close()
+#param_file = open('%s/%s' % (PARAMDIR, PARAMFILE), 'rU')
+#param_reader = csv.reader(param_file)
+#for row in param_reader:
+#    key = row[0]
+#    value = float(row[1])
+#    if key == 'SEED':
+#        SEED = int(value)
+#    elif key == 'NUM_RECEPTORS':
+#        NUM_RECEPTORS = int(value)
+#    elif key == 'DOCK_CENTER_X':
+#        DOCK_CENTER_X = float(value)
+#    elif key == 'DOCK_CENTER_Y':
+#        DOCK_CENTER_Y = float(value)
+#    elif key == 'DOCK_CENTER_Z':
+#        DOCK_CENTER_Z = float(value)
+#    elif key == 'DOCK_BOX_X':
+#        DOCK_BOX_X = float(value)
+#    elif key == 'DOCK_BOX_Y':
+#        DOCK_BOX_Y = float(value)
+#    elif key == 'DOCK_BOX_Z':
+#        DOCK_BOX_Z = float(value)
+#    elif key == 'DOCK_SPACING':
+#        DOCK_SPACING = float(value)
+#    elif key == 'DOCK_MAX_AFFINITY':
+#        DOCK_MAX_AFFINITY = float(value)
+#    elif key == 'DOCK_MIN_CLUSTER':
+#        DOCK_MIN_CLUSTER = float(value)
+#    elif key == 'DOCK_MAX_HITS':
+#        DOCK_MAX_HITS = int(value)
+#    elif key == 'MD_TIME':
+#        MD_TIME = float(value)
+#    elif key == 'MMPBSA_TIME':
+#        MMPBSA_TIME = float(value)
+#    elif key == 'MMPBSA_STEP':
+#        MMPBSA_STEP = float(value)
+#    elif key == 'TOX_ENERGY_MAX':
+#        TOX_ENERGY_MAX = float(value)
+#    elif key == 'TOX_DIST_MAX':
+#        TOX_DIST_MAX = float(value)
+#    elif key == 'CRITICAL_X':
+#        CRITICAL_X = float(value)
+#    elif key == 'CRITICAL_Y':
+#        CRITICAL_Y = float(value)
+#    elif key == 'CRITICAL_Z':
+#        CRITICAL_Z = float(value)
+#param_file.close()
 
 # Initialize random number generator
 random.seed(SEED)
@@ -274,41 +274,41 @@ def dock(lig_id, rec_id):
     runadt('prepare_dpf4.py -l lig.pdbqt -r target.pdbqt -o dock.dpf -p ga_num_generations=27 -p ga_num_evals=2500')
     
     # Run AutoGrid
-    os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
+    #os.system('%s -p %s -l grid.glg 2>/dev/null' % (AUTOGRID_EXE, GPF))
     
     # Run AutoDock
-    os.system('%s -p %s -l dock.dlg 2>/dev/null' % (AUTODOCK_EXE, DPF))
+    #os.system('%s -p %s -l dock.dlg 2>/dev/null' % (AUTODOCK_EXE, DPF))
     
     #Get the best conformation
     #http://autodock.scripps.edu/faqs-help/faq/is-there-a-way-to-save-a-protein-ligand-complex-as-a-pdb-file-in-autodock
-    complex_file = open('complex.pdb', 'w')
-    receptor_file = open(receptor_path)
-    for line in receptor_file:
-        if line.startswith('ATOM') or line.startswith('HETATM') or line.startswith('TER'):
-            complex_file.write(line)
-        if line.startswith('ATOM') or line.startswith('HETATM'):
-            serial = int(line[6:11])
-    dock_dlg = open('dock.dlg')
-    atom_index = serial + 1
-    for line in dock_dlg:
-        line = line.strip()
-        if not line.startswith('DOCKED'):
-            continue
-        line = line[8:]
-        if line.startswith('TER'):
-            break
-        if not line.startswith('ATOM'):
-            continue
-        line = line[0:66]
-        line = 'HETATM' + line[6:]
-        line = line[0:21] + 'X' + line[22:]
-        line = '%s%6d%s' % (line[0:6], atom_index, line[11:])
-        complex_file.write('%s\n' % line)
-        atom_index += 1
-    complex_file.write('TER\n')
-    complex_file.write('END\n')
-    dock_dlg.close()
-    complex_file.close()
+#    complex_file = open('complex.pdb', 'w')
+#    receptor_file = open(receptor_path)
+#    for line in receptor_file:
+#        if line.startswith('ATOM') or line.startswith('HETATM') or line.startswith('TER'):
+#            complex_file.write(line)
+#        if line.startswith('ATOM') or line.startswith('HETATM'):
+#            serial = int(line[6:11])
+#    dock_dlg = open('dock.dlg')
+#    atom_index = serial + 1
+#    for line in dock_dlg:
+#        line = line.strip()
+#        if not line.startswith('DOCKED'):
+#            continue
+#        line = line[8:]
+#        if line.startswith('TER'):
+#            break
+#        if not line.startswith('ATOM'):
+#            continue
+#        line = line[0:66]
+#        line = 'HETATM' + line[6:]
+#        line = line[0:21] + 'X' + line[22:]
+#        line = '%s%6d%s' % (line[0:6], atom_index, line[11:])
+#        complex_file.write('%s\n' % line)
+#        atom_index += 1
+#    complex_file.write('TER\n')
+#    complex_file.write('END\n')
+#    dock_dlg.close()
+#    complex_file.close()
     #os.system('babel -ipdb %s -opdb %s 2>/dev/null' % ('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % dock_work_dir))
             
     pose_path = '%s/complex.pdb' % dock_work_dir
@@ -334,7 +334,7 @@ def do_md(lig_id, rec_id, pose_path):
     shutil.copyfile('%s/namd/quick_equ.conf' % PARAMDIR, '%s/equ.conf' % md_work_dir)
     dock_work_dir = '%s/dock_lig%d_rec%d' % (WORKDIR, lig_id, rec_id)
     shutil.copyfile('%s/lig.pdb' % dock_work_dir, '%s/lig.pdb' % md_work_dir)
-    shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
+    #shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
     
     #Prepare system for MD using AmberTools
     os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
@@ -342,21 +342,21 @@ def do_md(lig_id, rec_id, pose_path):
     os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
     
     #Create ref-heat file
-    complex_file = open('complex.pdb')
-    refheat_file = open('ref-heat.pdb', 'w')
-    for line in complex_file:
-        if line.startswith('ATOM'):
-            if line[12:16].strip() in ['CA', 'N', 'O']:
-                line = line[0:30] + '%8.3f' % 50.0 + line[38:]
-            else:
-                line = line[0:30] + '%8.3f' % 0.0 + line[38:]
-            line = line[0:38] + '%8.3f' % 0.0 + '%8.3f' % 0.0 + line[55:]
-        refheat_file.write(line)
-    complex_file.close()
-    refheat_file.close()
+#    complex_file = open('complex.pdb')
+#    refheat_file = open('ref-heat.pdb', 'w')
+#    for line in complex_file:
+#        if line.startswith('ATOM'):
+#            if line[12:16].strip() in ['CA', 'N', 'O']:
+#                line = line[0:30] + '%8.3f' % 50.0 + line[38:]
+#            else:
+#                line = line[0:30] + '%8.3f' % 0.0 + line[38:]
+#            line = line[0:38] + '%8.3f' % 0.0 + '%8.3f' % 0.0 + line[55:]
+#        refheat_file.write(line)
+#    complex_file.close()
+#    refheat_file.close()
 
     #Do MD with namd
-    os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mpirt/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/../compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/lib/intel64:/opt/intel/mic/coi/host-linux-release/lib:/opt/intel/mic/myo/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mkl/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/tbb/lib/intel64/gcc4.4 ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
+    #os.system('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mpirt/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/../compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/lib/intel64:/opt/intel/mic/coi/host-linux-release/lib:/opt/intel/mic/myo/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mkl/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/tbb/lib/intel64/gcc4.4 ; /opt/openmpi/1.6/intel/bin/mpirun /opt/namd/2.9/bin/namd2 min.conf')
 
     print 'Done MD for lig_id=%d rec_id=%d' % (lig_id, rec_id)
 
@@ -466,11 +466,11 @@ def write_results(final_result_list, out_filename):
     except IOError:
         print 'Error opening %s' % out_filename
         sys.exit()
-    outfile.write('Chemical Name,Energy,Distance,Prediction\n')
+    outfile.write('Chemical Name,Energy,Distance,Prediction,STATUS\n')
     for result in final_result_list:
         lig_id, energy, distance, prediction = result
         lig_name = lig_name_dict[lig_id]
-        outfile.write('%s,%.1f,%.1f,%s\n' % (lig_name, energy, distance, prediction))
+        outfile.write('%s,%.1f,%.1f,%s,DONE\n' % (lig_name, energy, distance, prediction))
     outfile.close()
 
 # Predict toxicity for each ligand
