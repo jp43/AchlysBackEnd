@@ -5,6 +5,8 @@ import os
 import argparse
 import ConfigParser
 import numpy as np
+import logging
+import time
 import glob
 
 from achlys.kernel import docking
@@ -37,7 +39,7 @@ class AnalysisWorker(object):
             raise NotImplemented("analysis of results for MD software different than namd is not supported")
 
         if config.md.system == 'herg':
-            # names and RSN of Thr's residues
+            # names and RSN of THR's residues
             resIDs = [('THR', 210), ('THR', 465), ('THR', 720), ('THR', 975)]
 
         coords = []
@@ -90,6 +92,15 @@ class AnalysisWorker(object):
             help='config file containing some extra parameters')
 
         args = parser.parse_args()
+        logging.basicConfig(filename='achlys.log',
+                            filemode='a',
+                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
+                            datefmt="%H:%M:%S",
+                            level=logging.DEBUG)
+
+        tcpu1 = time.time()
+        logging.info('Starting analysis...')
+
         config = AnalysisConfig(args.config_file)
         curdir = os.getcwd()
 
@@ -114,3 +125,5 @@ class AnalysisWorker(object):
             print >> statfile, 'distance: %8.3f' %dist
             print >> statfile, 'binding free energy: %8.3f' %binding_free_energy
 
+        tcpu2 = time.time()
+        logging.info('Analysis done. Total time needed: %i s.' %(tcpu2-tcpu1))

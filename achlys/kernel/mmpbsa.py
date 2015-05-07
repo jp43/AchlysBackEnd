@@ -7,6 +7,8 @@ import tempfile
 import shutil
 import argparse
 import ConfigParser
+import logging
+import time
 import numpy as np
 
 from achlys.kernel import docking
@@ -134,6 +136,16 @@ igb=5, saltcon=0.150,
         parser = self.create_arg_parser()
         args = parser.parse_args()
 
+        if args.cpu_id == 0:
+            logging.basicConfig(filename='achlys.log',
+                            filemode='a',
+                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
+                            datefmt="%H:%M:%S",
+                            level=logging.DEBUG)
+
+            tcpu1 = time.time()
+            logging.info('Starting MMPBSA (pose %i)...'%args.cpu_id)
+
         config = MMPBSAAchlysConfig(args.config_file)
 
         curdir = os.getcwd()
@@ -142,3 +154,7 @@ igb=5, saltcon=0.150,
 
         self.prepare_mmpbsa(config)
         os.chdir(curdir) 
+
+        if args.cpu_id == 0:
+            tcpu2 = time.time()
+            logging.info('MMPBSA done (pose %i). Total time needed: %i s.'%(args.cpu_id, tcpu2-tcpu1)) 

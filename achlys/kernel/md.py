@@ -6,6 +6,8 @@ import subprocess
 import tempfile
 import shutil
 import argparse
+import logging
+import time
 import ConfigParser
 import numpy as np
 
@@ -233,6 +235,16 @@ quit"""% locals()
         parser = self.create_arg_parser()
         args = parser.parse_args()
 
+        if args.cpu_id == 0:
+            logging.basicConfig(filename='achlys.log',
+                            filemode='a',
+                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
+                            datefmt="%H:%M:%S",
+                            level=logging.DEBUG)
+
+            tcpu1 = time.time()
+            logging.info('Starting MD (pose %i)...'%args.cpu_id)
+
         config = MDAchlysConfig(args.config_file)
 
         curdir = os.getcwd()
@@ -250,3 +262,7 @@ quit"""% locals()
 
         # (D) equilibration
         self.run_equilibration(args, config)
+
+        if args.cpu_id == 0:
+            tcpu2 = time.time()
+            logging.info('MD simulations done (pose %i). Total time needed: %i s.'%(args.cpu_id, tcpu2-tcpu1))
