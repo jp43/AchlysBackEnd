@@ -144,7 +144,7 @@ class AchlysProgram(object):
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q serial.q
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
 #$ -V
@@ -159,13 +159,13 @@ run_docking $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file
 """% locals()
             file.write(script)
 
-    def write_post_docking_script(self, script_name, ncpus, ntargets, config_file):
+    def write_docking_analysis_script(self, script_name, ncpus, ntargets, config_file):
 
         jobname = os.path.splitext(script_name)[0]
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q serial.q
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -cwd
@@ -173,7 +173,7 @@ run_docking $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file
 
 set -e
 
-postdocking %(ntargets)s -f %(config_file)s
+dock_analysis %(ntargets)s -f %(config_file)s
 """% locals()
             file.write(script)
 
@@ -183,7 +183,7 @@ postdocking %(ntargets)s -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q parallel.q
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -t 1-%(ntasks)s:1
@@ -203,7 +203,7 @@ run_md $((SGE_TASK_ID-1)) %(ncpus_per_task)s -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q serial.q
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -t 1-%(ntasks)s:1
@@ -222,7 +222,7 @@ run_mmpbsa $((SGE_TASK_ID-1)) -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q achlys.q
+#$ -q serial.q
 #$ -l h_rt=1:00:00
 #$ -V
 #$ -cwd
@@ -230,7 +230,7 @@ run_mmpbsa $((SGE_TASK_ID-1)) -f %(config_file)s
 
 set -e
 
-run_analysis -f %(config_file)s
+md_analysis -f %(config_file)s
 """% locals()
             file.write(script)
 
@@ -271,9 +271,9 @@ run_analysis -f %(config_file)s
                 jobid = subprocess.check_output(['qsub', '-terse', script_name])
                 jobid = jobid.split('.')[0]
 
-                # (B) submit postdocking script
-                script_name = 'post_docking.sge'
-                self.write_post_docking_script(script_name, self.nligs, self.ntargets, args.config_file)
+                # (B) submit docking analysis script
+                script_name = 'dock_analysis.sge'
+                self.write_docking_analysis_script(script_name, self.nligs, self.ntargets, args.config_file)
 
                 jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
                 jobid = jobid.split('.')[0]

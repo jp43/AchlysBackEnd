@@ -7,12 +7,14 @@ import tempfile
 import shutil
 import re
 import argparse
+import logging
+import time
 import ConfigParser
 import numpy as np
 
 from achlys.kernel import docking
 
-class PostDocking(object):
+class DockingAnalysis(object):
 
     def __init__(self, args):
 
@@ -99,7 +101,7 @@ class PostDocking(object):
 
             os.chdir(curdir)
 
-class PostDockingExe(object):
+class DockingAnalysisExe(object):
 
     def create_arg_parser(self):
 
@@ -120,5 +122,17 @@ class PostDockingExe(object):
 
         parser = self.create_arg_parser()
         args = parser.parse_args()
+
+        logging.basicConfig(filename='achlys.log',
+                            filemode='a',
+                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
+                            datefmt="%H:%M:%S",
+                            level=logging.DEBUG)
+
+        tcpu1 = time.time()
+        logging.info('Starting docking analysis...')
      
-        PostDocking(args).run()
+        DockingAnalysis(args).run()
+
+        tcpu2 = time.time()
+        logging.info('Docking analysis done. Total time needed: %i s.' %(tcpu2-tcpu1))

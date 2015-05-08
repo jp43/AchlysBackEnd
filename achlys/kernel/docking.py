@@ -7,6 +7,9 @@ import tempfile
 import shutil
 import argparse
 import ConfigParser
+import logging
+import stat
+import time
 import numpy as np
 
 known_programs = ['autodock', 'vina']
@@ -157,11 +160,13 @@ prepare_receptor4.py -r target.pdb -o target.pdbqt
 vina --config vina.config &>> vina.out"""% locals()
                 file.write(script) 
 
+        os.chmod(script_name, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR)
+
     def run_docking(self, config):
     
         script_name = "run_" + config.program + ".sh"
         self.write_docking_script(script_name, config)
-        subprocess.call("bash " + script_name, shell=True)
+        subprocess.call("./" + script_name)
 
     def analyze_autodock_docking_results(self):
 
@@ -215,11 +220,20 @@ vina --config vina.config &>> vina.out"""% locals()
 
     def run(self):
 
+
         parser = self.create_arg_parser()
         args = parser.parse_args()    
 
-        config = DockingConfig(args.config_file)
- 
+        logging.basicConfig(filename='achlys.log',
+                            filemode='w',
+                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
+                            datefmt="%H:%M:%S",
+                            level=logging.DEBUG)
+
+        tcpu1 = time.time()
+        logging.info('Initializing docking...')
+
+        config = DockingConfig(args.config_file) 
         ncpus = args.ncpus
         cpu_id = args.cpu_id
         nligs = args.nligs
@@ -228,8 +242,10 @@ vina --config vina.config &>> vina.out"""% locals()
         curdir = os.getcwd()
 
         if cpu_id >= ncpus:
+            logging.error("CPU ID is supposed to be less than the number of CPUs")
             raise IOError("CPU ID is supposed to be less than the number of CPUs")
 
+        logging.info('Starting docking procedure...')
         if args.multi:
             if ntargets != ncpus:
                 raise ValueError("The number of targets should be equal to the number of CPUs")
@@ -252,3 +268,5 @@ vina --config vina.config &>> vina.out"""% locals()
                   os.chdir('..')
                os.chdir(curdir)
 
+        tcpu2 = time.time()
+        logging.info('Docking procedure done. Total time needed: %i s' %(tcpu2-tcpu1))
