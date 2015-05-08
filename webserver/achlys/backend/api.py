@@ -79,8 +79,8 @@ def build_results_data_json(results_file, png_dir, pdb_dir, model_id_list):
                 results_data_json_list.append(' "energy" : "%s" ,' % row[1])
                 results_data_json_list.append(' "distance" : "%s" ,' % row[2])
                 results_data_json_list.append(' "pdb_base64" : null ,')
-                png_path = '%s/chem%d.png' % (png_dir, chem_id - 1)
-                results_data_json_list.append(' "pdb_path" : "%s"' % png_path)
+                pdb_path = '%s/chem%d.pdb' % (pdb_dir, chem_id - 1)
+                results_data_json_list.append(' "pdb_path" : "%s"' % pdb_path)
             else:
                 results_data_json_list.append(' "model_id" : "%s" ,' % model_id)
                 results_data_json_list.append(' "prediction" : null ,')
@@ -292,9 +292,13 @@ def checkjob(request):
     company_id = job.company_id
     employee_id = job.employee_id
     job_name = job.job_name
-    model_id_list = job.model_id_list
+    if hasattr(job, 'model_id_list'):
+        model_id_list = job.model_id_list
+    else:
+        model_id_list = ['HERGKB1']
     num_chems = backend.struct_tools.count_structs(job.chem_lib_path)
-    cmd = 'python %s %d' % (backend.system.CHECK_JOB_PY_PATH, int(pk))
+    cmd = 'python %s %d %s' % (backend.system.CHECK_JOB_PY_PATH, int(pk), 
+            model_id_list[0])
     pipe = os.popen(cmd)
     if pipe == None:
         return django.http.HttpResponse(status=404)
@@ -357,7 +361,7 @@ def checkjob(request):
     if pipe_status != None or is_error:
         response_data = build_check_job_json(job_name, company_id, employee_id, 
                 num_chems, STATUS_ERROR, 
-                ['There was an error checking the job status'], 'null')
+                ['There was an error checking the job status'], 'null', '')
         return django.http.HttpResponse(response_data)
     return django.http.HttpResponse(response_data)
 

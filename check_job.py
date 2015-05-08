@@ -18,14 +18,15 @@ def pipetext(cmd):
     return text
 
 # Validate command line arguments
-if len(sys.argv) != 2:
-    print 'Usage: %s job_id' % (sys.argv[0])
+if len(sys.argv) != 3:
+    print 'Usage: %s job_id model_id' % (sys.argv[0])
     sys.exit()
 try:
     job_id = int(sys.argv[1])
 except ValueError:
     print 'job_id must be an integer'
     sys.exit()
+model_id = sys.argv[2]
 
 # Assign system specific variables
 hostname = socket.gethostname()
@@ -62,32 +63,17 @@ if TARGET_SYSTEM == 'local':
 
 elif TARGET_SYSTEM == 'px':
 
-    job_path = '/gluster/home/achlys/achlys/JOBS/%d' % job_id
-    cmd = 'ssh %s "[ -d %s ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
-    if pipetext(cmd).strip() == 'Notfound':
-        print 'job_path does not exist'
-        sys.exit()
-    else:
-        cmd = 'ssh %s "[ -f %s/DONE ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
-        if pipetext(cmd).strip() == 'Found':
-            print 'status=DONE'
-            local_job_path = '%s/%d' % (local_job_base_path, job_id)
-            if os.path.isdir(local_job_path):
-                pass
-                #print 'local_job_path already exists'
-                #sys.exit()
-            else:
-                os.mkdir(local_job_path)
-            os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
-            os.system('mkdir -p %s/PDB' % local_job_path)
-            os.system('scp %s:%s/pdb/chem*.pdb %s/PDB/' % (REMOTE_USER, job_path, local_job_path))
-            #os.system('mkdir -p %s/PNG' % local_job_path)
-            #os.system('scp %s:%s/png/chem*.png %s/PNG/' % (REMOTE_USER, job_path, local_job_path))
-            print 'results_path=%s/out.csv' % local_job_path
+    if model_id == 'DUMMY':
+
+        job_path = '/gluster/home/achlys/achlys/JOBS/%d' % job_id
+        cmd = 'ssh %s "[ -d %s ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+        if pipetext(cmd).strip() == 'Notfound':
+            print 'job_path does not exist'
+            sys.exit()
         else:
-            print 'status=RUNNING'
-            cmd = 'ssh %s "[ -f %s/out.csv ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+            cmd = 'ssh %s "[ -f %s/DONE ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
             if pipetext(cmd).strip() == 'Found':
+                print 'status=DONE'
                 local_job_path = '%s/%d' % (local_job_base_path, job_id)
                 if os.path.isdir(local_job_path):
                     pass
@@ -96,9 +82,73 @@ elif TARGET_SYSTEM == 'px':
                 else:
                     os.mkdir(local_job_path)
                 os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+                os.system('mkdir -p %s/PDB' % local_job_path)
+                os.system('scp %s:%s/pdb/chem*.pdb %s/PDB/' % (REMOTE_USER, job_path, local_job_path))
+                #os.system('mkdir -p %s/PNG' % local_job_path)
+                #os.system('scp %s:%s/png/chem*.png %s/PNG/' % (REMOTE_USER, job_path, local_job_path))
                 print 'results_path=%s/out.csv' % local_job_path
             else:
-                print 'results_path=NORESULTS'
+                print 'status=RUNNING'
+                cmd = 'ssh %s "[ -f %s/out.csv ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+                if pipetext(cmd).strip() == 'Found':
+                    local_job_path = '%s/%d' % (local_job_base_path, job_id)
+                    if os.path.isdir(local_job_path):
+                        pass
+                        #print 'local_job_path already exists'
+                        #sys.exit()
+                    else:
+                        os.mkdir(local_job_path)
+                    os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+                    print 'results_path=%s/out.csv' % local_job_path
+                else:
+                    print 'results_path=NORESULTS'
+
+    elif model_id == 'HERGKB1':
+    
+        job_path = '/gluster/home/achlys/achlys/JOBS/%d' % job_id
+        cmd = 'ssh %s "[ -d %s ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+        if pipetext(cmd).strip() == 'Notfound':
+            print 'job_path does not exist'
+            sys.exit()
+        else:
+            cmd = 'ssh %s "[ -f %s/DONE ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+            if pipetext(cmd).strip() == 'Found':
+                print 'status=DONE'
+                local_job_path = '%s/%d' % (local_job_base_path, job_id)
+                if os.path.isdir(local_job_path):
+                    pass
+                    #print 'local_job_path already exists'
+                    #sys.exit()
+                else:
+                    os.mkdir(local_job_path)
+                os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+                os.system('mkdir -p %s/PDB' % local_job_path)
+                os.system('scp %s:%s/pdb/chem*.pdb %s/PDB/' % (REMOTE_USER, job_path, local_job_path))
+                #os.system('mkdir -p %s/PNG' % local_job_path)
+                #os.system('scp %s:%s/png/chem*.png %s/PNG/' % (REMOTE_USER, job_path, local_job_path))
+                print 'results_path=%s/out.csv' % local_job_path
+            else:
+                print 'status=RUNNING'
+                cmd = 'ssh %s "[ -f %s/out.csv ] && echo Found || echo Notfound"' % (REMOTE_USER, job_path)
+                if pipetext(cmd).strip() == 'Found':
+                    local_job_path = '%s/%d' % (local_job_base_path, job_id)
+                    if os.path.isdir(local_job_path):
+                        pass
+                        #print 'local_job_path already exists'
+                        #sys.exit()
+                    else:
+                        os.mkdir(local_job_path)
+                    os.system('scp %s:%s/out.csv %s' % (REMOTE_USER, job_path, local_job_path))
+                    print 'results_path=%s/out.csv' % local_job_path
+                else:
+                    print 'results_path=NORESULTS'
+
+    
+    else:
+
+        print 'Unsupported model'
+        sys.exit()
+
 
 else:
 
