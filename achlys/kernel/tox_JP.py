@@ -144,7 +144,7 @@ class AchlysProgram(object):
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q serial.q
+#$ -q achlys.q
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
 #$ -V
@@ -165,7 +165,7 @@ run_docking $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q serial.q
+#$ -q achlys.q 
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -cwd
@@ -183,7 +183,7 @@ dock_analysis %(ntargets)s -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q parallel.q
+#$ -q achlys.q
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -t 1-%(ntasks)s:1
@@ -203,7 +203,7 @@ run_md $((SGE_TASK_ID-1)) %(ncpus_per_task)s -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q serial.q
+#$ -q achlys.q
 #$ -l h_rt=168:00:00
 #$ -V
 #$ -t 1-%(ntasks)s:1
@@ -222,15 +222,15 @@ run_mmpbsa $((SGE_TASK_ID-1)) -f %(config_file)s
 
         with open(script_name, 'w') as file:
             script ="""#$ -N %(jobname)s
-#$ -q serial.q
-#$ -l h_rt=1:00:00
+#$ -q achlys.q
+#$ -l h_rt=168:00:00
 #$ -V
 #$ -cwd
 #$ -S /bin/bash
 
 set -e
 
-md_analysis -f %(config_file)s
+run_analysis -f %(config_file)s
 """% locals()
             file.write(script)
 
