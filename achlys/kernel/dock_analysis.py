@@ -53,7 +53,7 @@ class DockingAnalysis(object):
             with open('target_ha.pdb', 'r') as pdbfile:
                 with open('complex.pdb', 'w') as cmplxfile:
                     for line in pdbfile:
-                        if line.startswith('ATOM'):
+                        if line.startswith(('ATOM','HETATM')):
                             newline = line.replace('\n','')
                             print >> cmplxfile, newline
                             if 'OXT' in newline:
@@ -86,7 +86,7 @@ class DockingAnalysis(object):
                 with open('lig.pdb', 'w') as cmplxpdbfile:
                     with open('complex.pdb', 'a') as cmplxfile:
                         for line in pdbfile:
-                            if line.startswith('ATOM'):
+                            if line.startswith(('ATOM','HETATM')):
                                 newline = line.replace('\n','')
                                 print >> cmplxpdbfile, "HETATM" + newline[6:]
                                 print >> cmplxfile, "HETATM" + newline[6:]

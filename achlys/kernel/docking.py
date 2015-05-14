@@ -82,11 +82,11 @@ class DockingWorker(object):
             type=int,
             help='total number of targets')
 
-        parser.add_argument('--multi',
-            dest='multi',
-            action='store_true',
-            default=False,
-            help='Run docking on multiple targets')
+        #parser.add_argument('--multi',
+        #    dest='multi',
+        #    action='store_true',
+        #    default=False,
+        #    help='Run docking on multiple targets')
 
         parser.add_argument('-f',
             dest='config_file',
@@ -211,15 +211,38 @@ vina --config vina.config &>> vina.out"""% locals()
                     line = dlgfile.next()
                 print >> posefile, "END"
 
+    def analyze_vina_docking_results(self):
+
+        with open('vina.out', 'r') as vinafile:
+            line = vinafile.next()
+            while not line.startswith('mode'):
+                line = vinafile.next()
+            nlines_to_skip = 2
+            for idx in range(nlines_to_skip):
+                line = vinafile.next()
+            line = vinafile.next()
+            free_energy = line.split()[1]
+            # save the binding free energy
+            with open("free_energy.txt", 'w') as fefile:
+                print >> fefile, free_energy
+
+        subprocess.call("pdbqt_to_pdb.py -f lig_out.pdbqt", shell=True)
+
+        with open('lig_out.pdb','r') as pdbfile:
+            with open('pose.pdb', 'w') as posefile:
+                for line in pdbfile:
+                    if line.startswith(('ATOM', 'HETATM')):
+                        print >> posefile, line[:66]
+                print >> posefile, 'END'
+
     def analyze_docking_results(self, config):
 
         if config.program == 'autodock':
             self.analyze_autodock_docking_results()
         elif config.program == 'vina':
-            raise NotImplemented("Vina analyzing procedure not implemented")
+            self.analyze_vina_docking_results()
 
     def run(self):
-
 
         parser = self.create_arg_parser()
         args = parser.parse_args()    
@@ -246,27 +269,37 @@ vina --config vina.config &>> vina.out"""% locals()
             raise IOError("CPU ID is supposed to be less than the number of CPUs")
 
         logging.info('Starting docking procedure...')
-        if args.multi:
-            if ntargets != ncpus:
-                raise ValueError("The number of targets should be equal to the number of CPUs")
-            # prepare the ligand
-            os.chdir('target%i'%cpu_id)
-            # run docking
-            self.run_docking(config)
-            self.analyze_docking_results(config)
-        else:
-            # compute the idx of the ligands handled by the CPU
-            idxs_lig = self.get_ligand_idxs(cpu_id, ncpus, nligs)
-            for idx in idxs_lig:
-               os.chdir('lig%i'%idx)
-               # prepare the ligand
-               for jdx in range(ntargets):
-                  os.chdir('target%i'%jdx)
-                  # run docking
-                  self.run_docking(config)
-                  self.analyze_docking_results(config)
-                  os.chdir('..')
-               os.chdir(curdir)
+
+        if ntargets != ncpus:
+            raise ValueError("The number of targets should be equal to the number of CPUs")
+
+        # prepare the ligand
+        os.chdir('target%i'%cpu_id)
+        # run docking
+        self.run_docking(config)
+        self.analyze_docking_results(config)
+
+        #if args.multi:
+        #    if ntargets != ncpus:
+        #        raise ValueError("The number of targets should be equal to the number of CPUs")
+        #    # prepare the ligand
+        #    os.chdir('target%i'%cpu_id)
+        #    # run docking
+        #    self.run_docking(config)
+        #    self.analyze_docking_results(config)
+        #else:
+        #    # compute the idx of the ligands handled by the CPU
+        #    idxs_lig = self.get_ligand_idxs(cpu_id, ncpus, nligs)
+        #    for idx in idxs_lig:
+        #       os.chdir('lig%i'%idx)
+        #       # prepare the ligand
+        #       for jdx in range(ntargets):
+        #          os.chdir('target%i'%jdx)
+        #          # run docking
+        #          self.run_docking(config)
+        #          self.analyze_docking_results(config)
+        #          os.chdir('..')
+        #       os.chdir(curdir)
 
         tcpu2 = time.time()
         logging.info('Docking procedure done. Total time needed: %i s' %(tcpu2-tcpu1))
