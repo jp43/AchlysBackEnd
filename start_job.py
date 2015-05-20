@@ -72,7 +72,7 @@ def do_prep_lig_smi(chem_path, job_path):
 
 #TARGET_SYSTEM = 'local'
 TARGET_SYSTEM = 'px'
-REMOTE_USER = 'achlys@head.pharmamatrix.ualberta.ca'
+REMOTE_USER = 'pwinter@head.pharmamatrix.ualberta.ca'
 
 # Validate command line arguments
 if len(sys.argv) < 3 or len(sys.argv) > 4:
@@ -151,31 +151,35 @@ if model_id == 'HERGKB1':
 
     def write_sge_file(tox_sge_path, chem_filename):
         tox_sge_file = open(tox_sge_path, 'w')
-        tox_sge_file.write('#$ -N achlys\n')
-        tox_sge_file.write('#$ -q achlys.q,parallel.q,serial.q\n')
+        tox_sge_file.write('#$ -N achlyskick\n')
+        tox_sge_file.write('#$ -q achlys.q,parallel.q,serial.q,p53.q\n')
         tox_sge_file.write('#$ -l h_rt=168:00:00\n')
         tox_sge_file.write('#$ -cwd\n')
         tox_sge_file.write('#$ -S /bin/bash\n')
         tox_sge_file.write('export PATH=/opt/mgltools/1.5.4/MGLToolsPckgs/AutoDockTools/Utilities24:$PATH\n')
         tox_sge_file.write('export PATH=/opt/autodock/4.2.3/bin:$PATH\n')
-        tox_sge_file.write('export PATH=/gluster/home/achlys/achlys/bin:$PATH\n')
+        tox_sge_file.write('export PATH=/nfs/r510-2/pwinter/achlys2/bin:$PATH\n')
         tox_sge_file.write('export PYTHONPATH=/opt/mgltools/1.5.4/MGLToolsPckgs:$PYTHONPATH\n')
-        tox_sge_file.write('export PYTHONPATH=/gluster/home/achlys/achlys/lib/python2.7/site-packages:$PYTHONPATH\n')
+        tox_sge_file.write('export PYTHONPATH=/nfs/r510-2/pwinter/achlys2/lib/python2.7/site-packages:$PYTHONPATH\n')
         tox_sge_file.write('export AMBERHOME=/pmshare/amber/amber12-20120918\n')
         tox_sge_file.write('export PATH=$AMBERHOME/bin:$PATH\n')
         tox_sge_file.write('export PATH=/opt/namd/2.9/bin:$PATH\n')
         tox_sge_file.write('export PATH=/opt/openmpi/1.6/intel/bin:$PATH\n')
         tox_sge_file.write('export LD_LIBRARY_PATH=/opt/openmpi/1.6/intel/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mpirt/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/../compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/ipp/lib/intel64:/opt/intel/mic/coi/host-linux-release/lib:/opt/intel/mic/myo/lib:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/compiler/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/mkl/lib/intel64:/nfs/r510-2/opt/intel/composer_xe_2013.3.163/tbb/lib/intel64/gcc4.4:$LD_LIBRARY_PATH\n')
         tox_sge_file.write('python prepligs.py %s\n' % chem_filename)
-        tox_sge_file.write('python /gluster/home/achlys/achlys/bin/tox \\\n')
+        #tox_sge_file.write('python /gluster/home/achlys/achlys/bin/tox \\\n')
+        #tox_sge_file.write('    -r /gluster/home/achlys/achlys/data/KB_HERG/PDB/* \\\n')
+        tox_sge_file.write('python /nfs/r510-2/pwinter/achlys2/bin/tox \\\n')
+        tox_sge_file.write('    -q achlys.q parallel.q serial.q p53.q \\\n')
+        tox_sge_file.write('    -r /nfs/r510-2/pwinter/achlys2/AchlysBackEnd/data/KB_HERG/PDB/* \\\n')
         tox_sge_file.write('    -l pdb/* \\\n')
-        for i in xrange(1, 46):
-            if i == 1:
-                tox_sge_file.write('    -r /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_%02d.pdb \\\n' % i)
-            else:
-                tox_sge_file.write('    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_%02d.pdb \\\n' % i)
-        tox_sge_file.write('    -n 8 \\\n')
-        tox_sge_file.write('    --multi \\\n')
+        #for i in xrange(1, 46):
+        #    if i == 1:
+        #        tox_sge_file.write('    -r /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_%02d.pdb \\\n' % i)
+        #    else:
+        #        tox_sge_file.write('    /gluster/home/achlys/achlys/data/KB_HERG/PDB/hERG-conformations_%02d.pdb \\\n' % i)
+        #tox_sge_file.write('    -n 8 \\\n')
+        #tox_sge_file.write('    --multi \\\n')
         tox_sge_file.write('    -f config_PW.ini\n')
         tox_sge_file.write('date\n')
         tox_sge_file.close()
@@ -190,7 +194,7 @@ if model_id == 'HERGKB1':
     elif TARGET_SYSTEM == 'px':
 
         # Create job directory on remote server, copy chem file and tox.py to it, launch with qsub
-        job_path = '/gluster/home/achlys/achlys/JOBS/%d' % job_id
+        job_path = '/nfs/r510-2/pwinter/achlys2/JOBS/%d' % job_id
         os.system('ssh %s "mkdir %s"' % (REMOTE_USER, job_path))
         chem_filename = os.path.basename(chem_path)
         os.system('scp %s %s:%s/%s' % (chem_path, REMOTE_USER, job_path, chem_filename))
@@ -214,16 +218,16 @@ elif model_id == 'DUMMY':
 
     def write_sge_file(tox_sge_path, chem_filename):
         tox_sge_file = open(tox_sge_path, 'w')
-        tox_sge_file.write('#$ -N achlys\n')
-        tox_sge_file.write('#$ -q achlys.q,parallel.q,serial.q\n')
+        tox_sge_file.write('#$ -N achlyskick\n')
+        tox_sge_file.write('#$ -q achlys.q,parallel.q,serial.q,p53.q\n')
         tox_sge_file.write('#$ -l h_rt=168:00:00\n')
         tox_sge_file.write('#$ -cwd\n')
         tox_sge_file.write('#$ -S /bin/bash\n')
         tox_sge_file.write('export PATH=/opt/mgltools/1.5.4/MGLToolsPckgs/AutoDockTools/Utilities24:$PATH\n')
         tox_sge_file.write('export PATH=/opt/autodock/4.2.3/bin:$PATH\n')
-        tox_sge_file.write('export PATH=/gluster/home/achlys/achlys/bin:$PATH\n')
+        tox_sge_file.write('export PATH=/nfs/r510-2/pwinter/achlys2/bin:$PATH\n')
         tox_sge_file.write('export PYTHONPATH=/opt/mgltools/1.5.4/MGLToolsPckgs:$PYTHONPATH\n')
-        tox_sge_file.write('export PYTHONPATH=/gluster/home/achlys/achlys/lib/python2.7/site-packages:$PYTHONPATH\n')
+        tox_sge_file.write('export PYTHONPATH=/nfs/r510-2/pwinter/achlys2/lib/python2.7/site-packages:$PYTHONPATH\n')
         tox_sge_file.write('export AMBERHOME=/pmshare/amber/amber12-20120918\n')
         tox_sge_file.write('export PATH=$AMBERHOME/bin:$PATH\n')
         tox_sge_file.write('python prepligs.py %s\n' % chem_filename)
@@ -240,7 +244,7 @@ elif model_id == 'DUMMY':
     elif TARGET_SYSTEM == 'px':
 
         # Create job directory on remote server, copy chem file and tox.py to it, launch with qsub
-        job_path = '/gluster/home/achlys/achlys/JOBS/%d' % job_id
+        job_path = '/nfs/r510-2/pwinter/achlys2/JOBS/%d' % job_id
         os.system('ssh %s "mkdir %s"' % (REMOTE_USER, job_path))
         chem_filename = os.path.basename(chem_path)
         os.system('scp %s %s:%s/%s' % (chem_path, REMOTE_USER, job_path, chem_filename))
@@ -250,7 +254,7 @@ elif model_id == 'DUMMY':
         write_sge_file(tox_sge_path, chem_filename)
         prepligs_path = '/home/achlys/AchlysBackEnd/prepligs.py'
         os.system('scp %s %s:%s' % (prepligs_path, REMOTE_USER, job_path))
-        os.system('scp %s %s:%s' % ('/home/achlys/AchlysBackEnd/lib/struct_tools.py', REMOTE_USER, job_path))
+        os.system('scp %s %s:%s' % ('/nfs/r510-2/pwinter/achlys2/AchlysBackEnd/lib/struct_tools.py', REMOTE_USER, job_path))
         os.system('scp %s %s:%s' % (tox_sge_path, REMOTE_USER, job_path))
         os.system('scp %s %s:%s' % (tox_ini_path, REMOTE_USER, job_path))
         os.system('ssh %s "cd %s ; qsub tox.sge"' % (REMOTE_USER, job_path))

@@ -39,7 +39,7 @@ STATUS_ERROR = 'ERROR'
 # Model IDs
 MODEL_HERGKB1 = 'HERGKB1'
 MODEL_DUMMY = 'DUMMY'
-DEFAULT_MODEL = MODEL_DUMMY
+DEFAULT_MODEL = MODEL_HERGKB1
 SUPPORTED_MODELS = [MODEL_HERGKB1, MODEL_DUMMY]
 
 # Read the results CSV file and return a JSON string representation
@@ -256,6 +256,7 @@ def startjob(request):
     new_job.company_id = company_id
     new_job.employee_id = employee_id
     new_job.job_name = job_name
+    new_job.model_id_list = json.dumps(model_id_list)
     new_job.save()
     job_id = new_job.id
     if not os.path.isfile(chem_lib_path):
@@ -292,13 +293,16 @@ def checkjob(request):
     company_id = job.company_id
     employee_id = job.employee_id
     job_name = job.job_name
-    if hasattr(job, 'model_id_list'):
-        model_id_list = job.model_id_list
-    else:
-        model_id_list = ['HERGKB1']
+    #if hasattr(job, 'model_id_list'):
+    #    model_id_list = job.model_id_list
+    #else:
+    #    model_id_list = ['HERGKB1']
+    model_id_list = json.loads(job.model_id_list)
     num_chems = backend.struct_tools.count_structs(job.chem_lib_path)
     cmd = 'python %s %d %s' % (backend.system.CHECK_JOB_PY_PATH, int(pk), 
             model_id_list[0])
+    #response_data = '%s' % cmd
+    #return django.http.HttpResponse(response_data)
     pipe = os.popen(cmd)
     if pipe == None:
         return django.http.HttpResponse(status=404)
@@ -309,9 +313,6 @@ def checkjob(request):
                 num_chems, STATUS_ERROR, ['The job is in an error state'], 
                 'null')
     elif text.strip() == 'status=%s' % STATUS_RUNNING:
-        response_data = build_check_job_json(job_name, company_id, employee_id, 
-                num_chems, STATUS_RUNNING, ['The job is in an error state'], 
-                'null', None)
         response_data = build_check_job_json(job_name, company_id, employee_id, 
                 num_chems, STATUS_RUNNING, None, 0.0, None)
         text = pipe.next()

@@ -7,6 +7,7 @@ class Job(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     company_id = models.TextField(default='NO_COMPANY_ID')
     employee_id = models.TextField(default='NO_EMPLOYEE_ID')
+    model_id_list = models.TextField(default='["HERGKB1"]')
 
     def __unicode__(self):
         return self.job_id

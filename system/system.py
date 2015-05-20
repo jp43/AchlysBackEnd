@@ -3,6 +3,7 @@ import sys, socket
 hostname = socket.gethostname()
 if hostname == 'silence':
     ACHLYSBACKEND_PATH = '/home/achlys/AchlysBackEnd'
+    #ACHLYSBACKEND_PATH = '/nfs/r510-2/pwinter/achlys2/AchlysBackEnd'
     START_JOB_PY_PATH = '%s/start_job.py' % ACHLYSBACKEND_PATH
     CHECK_JOB_PY_PATH = '%s/check_job.py' % ACHLYSBACKEND_PATH
 else:

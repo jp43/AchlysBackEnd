@@ -79,8 +79,8 @@ elif hostname.startswith('bl220-c') or hostname in ['head01', 'head02']:
     AUTODOCK_EXE = '/opt/autodock/4.2.3/bin/autodock4'
     AMBERHOME = '/pmshare/amber/amber12-20120918'
     AMBER_BIN = '/pmshare/amber/amber12-20120918/bin'
-    PARAMDIR = '/gluster/home/achlys/achlys/AchlysBackEnd/params'
-    DATADIR = '/gluster/home/achlys/achlys/AchlysBackEnd/data'
+    PARAMDIR = '/nfs/r510-2/pwinter/achlys2/AchlysBackEnd/params'
+    DATADIR = '/nfs/r510-2/pwinter/achlys2/AchlysBackEnd/data'
 else:
     print 'Unsupported system'
     sys.exit()
@@ -95,7 +95,7 @@ DPF = '%s/autodock/quick_dock.dpf' % PARAMDIR
 
 # Default parameters for toxicity prediction method
 SEED = 754855
-NUM_RECEPTORS = 1
+NUM_RECEPTORS = 10
 DOCK_CENTER_X = 6.861
 DOCK_CENTER_Y = 8.825
 DOCK_CENTER_Z = 2.155
@@ -105,7 +105,7 @@ DOCK_BOX_Z = 23.8
 DOCK_SPACING = 0.238
 DOCK_MAX_AFFINITY = 100#-6 #kcal/mol
 DOCK_MIN_CLUSTER = 0.25
-DOCK_MAX_HITS = 3
+DOCK_MAX_HITS = 5
 MD_TIME = 10000 #ps
 MMPBSA_TIME = 5000 #ps
 MMPBSA_STEP = 10 #ps
@@ -337,9 +337,9 @@ def do_md(lig_id, rec_id, pose_path):
     #shutil.copyfile('%s/complex.pdb' % dock_work_dir, '%s/complex.pdb' % md_work_dir)
     
     #Prepare system for MD using AmberTools
-    os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
-    os.system('export AMBERHOME=%s ; %s/parmchk -i lig.prepin -f prepi -o lig.frcmod' % (AMBERHOME, AMBER_BIN))
-    os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
+#    os.system('export AMBERHOME=%s ; %s/antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi -j 4  -s 2 -at gaff -c gas -du y -s 2 -pf y -nc 1' % (AMBERHOME, AMBER_BIN))
+#    os.system('export AMBERHOME=%s ; %s/parmchk -i lig.prepin -f prepi -o lig.frcmod' % (AMBERHOME, AMBER_BIN))
+#    os.system('export AMBERHOME=%s ; %s/tleap -f leap.in' % (AMBERHOME, AMBER_BIN))
     
     #Create ref-heat file
 #    complex_file = open('complex.pdb')
@@ -365,13 +365,13 @@ def do_md(lig_id, rec_id, pose_path):
     return success, traj_path
 
 def do_mmpbsa(traj_id):
-    energy = random.random() * -100
+    energy = random.uniform(-60,-12)
     conformation = '/dev/null'
     success = True
     return success, energy, conformation
 
 def get_distance(conformation):
-    return random.random() * 10
+    return random.uniform(1.2,4.2)
 
     cmd = 'babel -f 1 -l 1 -ipdbqt %s_out.pdbqt -opdb %s_out.pdb 2>/dev/null' \
             % (chem_name, chem_name)
