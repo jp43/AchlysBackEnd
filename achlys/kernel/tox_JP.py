@@ -120,24 +120,6 @@ class AchlysProgram(object):
             nargs='*',
             help = 'Receptor coordinate file(s): .pdb')
  
-        #parser.add_argument('-n',
-        #    type=int,
-        #    dest='nmaxcpus',
-        #    default=None,
-        #    help='max number of CPUs')
-
-        #parser.add_argument('--multi',
-        #    dest='multi',
-        #    action='store_true',
-        #    default=False,
-        #    help='use one job array per ligand (the number of cpus used for each array is given by the number of targets)')
-
-        parser.add_argument('-q',
-            type=str,
-            dest='queue',
-            nargs='*',
-            help = 'Queue names')
-
         parser.add_argument('-f',
             dest='config_file',
             required=True,
@@ -147,11 +129,6 @@ class AchlysProgram(object):
     
     def write_docking_job_array(self, script_name, ncpus, nligs, ntargets, config_file, queue):
     
-        #if multi:
-        #    multi_flag = "--multi"
-        #else:
-        #    multi_flag = ""
-
         jobname = os.path.splitext(script_name)[0]
 
         with open(script_name, 'w') as file:
@@ -163,27 +140,9 @@ class AchlysProgram(object):
 #$ -cwd
 #$ -S /bin/bash
 
-set -e
-
-run_docking $((SGE_TASK_ID-1)) %(ncpus)s %(nligs)s %(ntargets)s -f %(config_file)s
-"""% locals()
-            file.write(script)
-
-    def write_docking_analysis_script(self, script_name, ncpus, ntargets, config_file, queue):
-
-        jobname = os.path.splitext(script_name)[0]
-
-        with open(script_name, 'w') as file:
-            script ="""#$ -N %(jobname)s
-#$ -q %(queue)s
-#$ -l h_rt=168:00:00
-#$ -V
-#$ -cwd
-#$ -S /bin/bash
-
-set -e
-
-dock_analysis %(ntargets)s -f %(config_file)s
+cd target$((SGE_TASK_ID-1))
+docking.py -f %(config_file)s
+echo $? > target$((SGE_TASK_ID-1)).out
 """% locals()
             file.write(script)
 
@@ -277,6 +236,8 @@ analysis -f %(config_file)s
             script_name = 'run_docking.sge'
             self.write_docking_job_array(script_name, self.ntargets, self.nligs, self.ntargets, args.config_file, self.queue)
 
+            
+
             jobid = subprocess.check_output(['qsub', '-terse', script_name])
             jobid = jobid.split('.')[0]
 
@@ -310,60 +271,3 @@ analysis -f %(config_file)s
             jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
             os.chdir(curdir)
 
-        #if args.multi:
-        #    for idx in range(self.nligs): # submit one array job per ligand
-        #        rundir = self.workdir + '/lig%i'%idx
-        #        shutil.copyfile(args.config_file, rundir + '/' + args.config_file)
-
-        #        os.chdir(rundir) 
-        #        # (A) submit docking script
-        #        script_name = 'run_docking.sge'
-        #        self.write_docking_job_array(script_name, self.ntargets, self.nligs, self.ntargets, args.config_file, multi=True)
-
-        #        jobid = subprocess.check_output(['qsub', '-terse', script_name])
-        #        jobid = jobid.split('.')[0]
-
-        #        sys.exit()
-
-        #        # (B) submit docking analysis script
-        #        script_name = 'dock_analysis.sge'
-        #        self.write_docking_analysis_script(script_name, self.nligs, self.ntargets, args.config_file)
-
-        #        jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
-        #        jobid = jobid.split('.')[0]
-
-        #        # (C) submit MD script
-        #        script_name = 'run_md.sge'
-        #        ntasks = self.docking.nposes
-        #        ncpus_per_task = 8
-        #        self.write_md_script(script_name, ntasks, ncpus_per_task, args.config_file)
-
-        #        jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
-        #        jobid = jobid.split('.')[0]
-
-        #        # (D) submit MMPBSA
-        #        script_name = 'run_mmpbsa.sge'
-        #        self.write_mmpbsa_script(script_name, ntasks, args.config_file)
- 
-        #        jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
-        #        jobid = jobid.split('.')[0]
-
-        #        # (E) submit analysis
-        #        script_name = 'run_analysis.sge'
-        #        self.write_analysis_script(script_name, args.config_file)
-
-        #        jobid = subprocess.check_output(['qsub', '-terse', '-hold_jid', jobid, script_name])
-        #        os.chdir(curdir)
-
-        #else: # submit only one job array for all the ligands
-        #    if args.nmaxcpus is None:
-        #        ncpus = nligs
-        #    else:
-        #        ncpus = min(nligs, args.nmaxcpus)
-
-        #    rundir = self.workdir
-        #    shutil.copyfile(args.config_file, rundir + '/' + args.config_file)
-        #    os.chdir(rundir)
-        #    script_name = 'run_docking.sge'
-        #    self.write_docking_job_array(script_name, ncpus, self.nligs, self.ntargets, args.config_file) 
-        #    subprocess.call("qsub " + script_name, shell=True)

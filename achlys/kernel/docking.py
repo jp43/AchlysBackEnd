@@ -13,16 +13,17 @@ import time
 import numpy as np
 
 known_programs = ['autodock', 'vina']
+known_extract_options = ['all', 'lowest', 'none']
 
 class DockingConfigError(Exception):
     pass
 
 class DockingConfig(object):
 
-    def __init__(self, config_file):
+    def __init__(self, args):
 
         config = ConfigParser.SafeConfigParser()
-        config.read(config_file)
+        config.read(args.config_file)
 
         if config.has_option('DOCKING', 'program'):
             program = config.get('DOCKING', 'program').lower()
@@ -56,41 +57,40 @@ class DockingConfig(object):
         else:
             self.nposes = 7
 
+        self.input_file_l = args.input_file_l
+        self.input_file_r = args.input_file_r
+
+        if args.extract.lower() in known_extract_options:
+            self.extract = args.extract.lower()
+        else:
+            raise DockingConfigError("Extract option should be one of " + ", ".join(known_extract_options))
+
 class DockingWorker(object):
 
     def create_arg_parser(self):
 
         parser = argparse.ArgumentParser(description="Run Achlys Docking")
 
-        parser.add_argument('cpu_id',
-            metavar='CPU ID',
-            type=int,
-            help='CPU ID')
+        parser.add_argument('-l',
+            type=str,
+            dest='input_file_l',
+            default='lig.pdb',
+            help = 'Ligand coordinate file(s): .pdb, .sdf')
 
-        parser.add_argument('ncpus',
-            metavar='number of cpus',
-            type=int,
-            help='total number of cpus used')
-
-        parser.add_argument('nligs',
-            metavar='number of ligands',
-            type=int,
-            help='total number of ligands')
-
-        parser.add_argument('ntargets',
-            metavar='number of targets',
-            type=int,
-            help='total number of targets')
-
-        #parser.add_argument('--multi',
-        #    dest='multi',
-        #    action='store_true',
-        #    default=False,
-        #    help='Run docking on multiple targets')
+        parser.add_argument('-r',
+            type=str,
+            dest='input_file_r',
+            default='target.pdb',
+            help = 'Receptor coordinate file(s): .pdb')
 
         parser.add_argument('-f',
             dest='config_file',
             help='config file containing some extra parameters')
+
+        parser.add_argument('--extract',
+            dest='extract',
+            default='lowest',
+            help='extract ligand conformations: all, lowest, none')
 
         return parser
 
@@ -127,7 +127,7 @@ class DockingWorker(object):
 
 set -e
 # generate .pdbqt files
-prepare_ligand4.py -l ../lig.pdb -o lig.pdbqt
+prepare_ligand4.py -l lig.pdb -o lig.pdbqt
 prepare_receptor4.py -r target.pdb -o target.pdbqt
 
 # run autogrid
@@ -153,7 +153,7 @@ autodock4 -p dock.dpf -l dock.dlg"""% locals()
                 script ="""#!%(shebang)s
 
 # generate .pdbqt files
-prepare_ligand4.py -l ../lig.pdb -o lig.pdbqt
+prepare_ligand4.py -l lig.pdb -o lig.pdbqt
 prepare_receptor4.py -r target.pdb -o target.pdbqt
 
 # run vina
@@ -165,141 +165,194 @@ vina --config vina.config &>> vina.out"""% locals()
     def run_docking(self, config):
     
         script_name = "run_" + config.program + ".sh"
+
         self.write_docking_script(script_name, config)
         subprocess.call("./" + script_name)
 
-    def analyze_autodock_docking_results(self):
+    def analyze_autodock_docking_results(self, config):
 
-        hist = []
-        with open('dock.dlg', 'r') as dlgfile:
-            # (A) get the index of the most populated cluster
-            line = dlgfile.next()
-            while "CLUSTERING HISTOGRAM" not in line:
-                line = dlgfile.next()
-            nlines_to_skip = 8
-            for idx in range(nlines_to_skip):
-                dlgfile.next()
-            while True:
-                line = dlgfile.next()
-                if line[0] == '_':
-                    break
-                hist.append(int(line.split('|')[4].strip()))
-            cluster_idx = np.argmax(np.array(hist))+1
+        if config.extract == 'lowest':
 
-            # (B) get the lowest binding free energy
-            while "Cluster Rank = %i"%cluster_idx not in line:
-                oldline = line # do backup 
+            hist = []
+            with open('dock.dlg', 'r') as dlgfile:
+                # (A) get the index of the most populated cluster
                 line = dlgfile.next()
-            run_idx = int(oldline.split('=')[1])
-            nlines_to_skip = 4
-            for idx in range(nlines_to_skip):
-                dlgfile.next()
-            line = dlgfile.next()
-            free_energy = float(line[48:53])
-            
-            # save the binding free energy
-            with open("free_energy.txt", 'w') as fefile:
-                print >> fefile, free_energy
-
-            # (C) save the correct pose
-            while "ATOM" not in line:
-                line = dlgfile.next()
-        
-            with open('pose.pdb', 'w') as posefile:
-                while "TER" not in line:
-                    print >> posefile, line[:66]
+                while "CLUSTERING HISTOGRAM" not in line:
                     line = dlgfile.next()
-                print >> posefile, "END"
+                nlines_to_skip = 8
+                for idx in range(nlines_to_skip):
+                    dlgfile.next()
+                while True:
+                    line = dlgfile.next()
+                    if line[0] == '_':
+                        break
+                    hist.append(int(line.split('|')[4].strip()))
+                cluster_idx = np.argmax(np.array(hist))+1
 
-    def analyze_vina_docking_results(self):
+                # (B) get the lowest binding free energy
+                while "Cluster Rank = %i"%cluster_idx not in line:
+                    oldline = line # do backup 
+                    line = dlgfile.next()
+                run_idx = int(oldline.split('=')[1])
+                nlines_to_skip = 4
+                for idx in range(nlines_to_skip):
+                    dlgfile.next()
+                line = dlgfile.next()
+                free_energy = float(line[48:53])
+                
+                # save the binding free energy
+                with open("affinity.dat", 'w') as fefile:
+                    print >> fefile, free_energy
 
-        with open('vina.out', 'r') as vinafile:
-            line = vinafile.next()
-            while not line.startswith('mode'):
-                line = vinafile.next()
-            nlines_to_skip = 2
-            for idx in range(nlines_to_skip):
-                line = vinafile.next()
-            line = vinafile.next()
-            free_energy = line.split()[1]
-            # save the binding free energy
-            with open("free_energy.txt", 'w') as fefile:
-                print >> fefile, free_energy
+                # (C) save the correct pose
+                while "ATOM" not in line:
+                    line = dlgfile.next()
+ 
+                with open('lig_out.pdb', 'w') as posefile:
+                    while "TER" not in line:
+                        print >> posefile, 'ATOM  ' + line[6:66]
+                        line = dlgfile.next()
+                    print >> posefile, "END"
 
-        subprocess.call("pdbqt_to_pdb.py -f lig_out.pdbqt", shell=True)
+        elif config.extract == 'all':
+            with open('dock.dlg', 'r') as dlgfile:
 
-        with open('lig_out.pdb','r') as pdbfile:
-            with open('pose.pdb', 'w') as posefile:
-                for line in pdbfile:
-                    if line.startswith(('ATOM', 'HETATM')):
-                        print >> posefile, line[:66]
-                print >> posefile, 'END'
+                with open("affinity.dat", 'w') as fefile:
+                    with open('lig_out.pdb', 'w') as posefile:
+                       isconf = False 
+                       for line in dlgfile:
+
+                          if line.startswith('DOCKED:'):
+                              isconf = True
+                              # (A) save binding energy
+                              if 'Free Energy of Binding' in line:
+                                 free_energy = float(line[53:61])
+                                 print >> fefile, free_energy
+
+                              # (B) save atom coordinates
+                              if line[8:].startswith(('ATOM','HETATM')):
+                                 print >> posefile, 'ATOM  ' + line[14:74]
+                          elif isconf: # done with the current pose
+                              isconf = False
+                              print >> posefile, 'END'
+
+        if config.extract in ['lowest', 'all']:
+            self.prepare_ligand(config)
+
+    def analyze_vina_docking_results(self, config):
+
+        if config.extract in ['lowest', 'all']:
+            with open('lig_out.pdbqt','r') as pdbqtfile:
+
+                with open('lig_out.pdb', 'w') as posefile:
+                    with open('affinity.dat', 'w') as fefile:
+
+                        for line in pdbqtfile:
+                            if line.startswith(('ATOM', 'HETATM')):
+                                print >> posefile, 'ATOM  ' + line[6:66]
+                            elif line.startswith('REMARK VINA RESULT:'):
+                                free_energy=float(line[19:].split()[0])
+                                print >> fefile, free_energy
+                            elif line.startswith('ENDMDL'):
+                                print >> posefile, 'END'
+                                if config.extract == 'lowest':
+                                    break
+
+            self.prepare_ligand(config)
+
+    def prepare_ligand(self, config):
+        """Prepare ligands for Amber/NAMD simulations"""
+
+        eh, pdbfile_tmp = tempfile.mkstemp(suffix='.pdb')
+        fh, pdbfile_h_tmp = tempfile.mkstemp(suffix='.pdb')
+        gh, pdbfile_h_1_tmp = tempfile.mkstemp(suffix='.pdb')
+
+        with open('lig_out.pdb', 'r') as ligf:
+            with open('lig_out_h.pdb', 'w') as lighf:
+                with open('complex.pdb', 'w') as cmplxf:
+
+                    isconf = False
+                    for line in ligf:
+                        if not isconf:
+                            isconf = True
+                            g = open(pdbfile_tmp, 'w')
+                        if line.startswith(('ATOM', 'HETATM')):
+                            g.write(line)
+
+                        elif line.startswith('END'):
+                            isconf = False
+                            g.write('END')
+                            g.close()
+                            # (A) add hydrogens to extracted structure
+                            subprocess.call('babel -ipdb ' + pdbfile_tmp + ' -opdb ' + pdbfile_h_tmp + ' -h', shell=True)
+                            # (B) give unique name to atoms
+                            self.give_unique_atom_names(pdbfile_h_tmp, pdbfile_h_1_tmp)
+                            # (C) write target in complex.pdb
+                            with open('target.pdb') as targtf:
+                                for line_t in targtf:
+                                    if line_t.startswith(('ATOM','HETATM')):
+                                        newline = line_t.replace('\n','')
+                                        print >> cmplxf, newline
+                                    elif 'TER' in line_t:
+                                        print >> cmplxf, 'TER'
+                            # (D) write ligand in complex.pdb and lig_out_h.pdb
+                            with open(pdbfile_h_1_tmp, 'r') as tmpf:
+                                for line_t in tmpf:
+                                    if line_t.startswith(('ATOM','HETATM')):
+                                        lighf.write(line_t)
+                                        cmplxf.write(line_t)
+                                lighf.write('TER\nEND\n')
+                                cmplxf.write('TER\nEND\n')
+
+    def give_unique_atom_names(self, input_file, output_file):
+
+        with open(input_file, 'r') as oldf:
+
+            newf = open(output_file, 'w')
+            known_atom_types = []
+            atom_numbers = []
+
+            for line in oldf:
+                if line.startswith(('ATOM', 'HETATM')):
+
+                    atom_type = line[12:14].strip()
+                    if atom_type not in known_atom_types:
+                        known_atom_types.append(atom_type)
+                        atom_numbers.append(1)
+                        newf.write(line)
+                    else:
+                        idx = known_atom_types.index(atom_type)
+                        atom_number = str(atom_numbers[idx])
+                        newf.write(line[:14]+atom_number+line[14+len(atom_number):])
+                        atom_numbers[idx] += 1 
+
+                elif line.startswith('END'):
+                    newf.write('END\n')
+                    newf.close() 
 
     def analyze_docking_results(self, config):
 
         if config.program == 'autodock':
-            self.analyze_autodock_docking_results()
+            self.analyze_autodock_docking_results(config)
         elif config.program == 'vina':
-            self.analyze_vina_docking_results()
+            self.analyze_vina_docking_results(config)
 
     def run(self):
 
         parser = self.create_arg_parser()
         args = parser.parse_args()    
 
-        logging.basicConfig(filename='achlys.log',
-                            filemode='w',
-                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
-                            datefmt="%H:%M:%S",
-                            level=logging.DEBUG)
-
         tcpu1 = time.time()
-        logging.info('Initializing docking...')
 
-        config = DockingConfig(args.config_file) 
-        ncpus = args.ncpus
-        cpu_id = args.cpu_id
-        nligs = args.nligs
-        ntargets = args.ntargets
+        print('Starting docking procedure...')
+        config = DockingConfig(args)
 
-        curdir = os.getcwd()
-
-        if cpu_id >= ncpus:
-            logging.error("CPU ID is supposed to be less than the number of CPUs")
-            raise IOError("CPU ID is supposed to be less than the number of CPUs")
-
-        logging.info('Starting docking procedure...')
-
-        if ntargets != ncpus:
-            raise ValueError("The number of targets should be equal to the number of CPUs")
-
-        # prepare the ligand
-        os.chdir('target%i'%cpu_id)
         # run docking
         self.run_docking(config)
         self.analyze_docking_results(config)
 
-        #if args.multi:
-        #    if ntargets != ncpus:
-        #        raise ValueError("The number of targets should be equal to the number of CPUs")
-        #    # prepare the ligand
-        #    os.chdir('target%i'%cpu_id)
-        #    # run docking
-        #    self.run_docking(config)
-        #    self.analyze_docking_results(config)
-        #else:
-        #    # compute the idx of the ligands handled by the CPU
-        #    idxs_lig = self.get_ligand_idxs(cpu_id, ncpus, nligs)
-        #    for idx in idxs_lig:
-        #       os.chdir('lig%i'%idx)
-        #       # prepare the ligand
-        #       for jdx in range(ntargets):
-        #          os.chdir('target%i'%jdx)
-        #          # run docking
-        #          self.run_docking(config)
-        #          self.analyze_docking_results(config)
-        #          os.chdir('..')
-        #       os.chdir(curdir)
-
         tcpu2 = time.time()
-        logging.info('Docking procedure done. Total time needed: %i s' %(tcpu2-tcpu1))
+        print('Docking procedure done. Total time needed: %i s' %(tcpu2-tcpu1))
+
+if __name__ == '__main__':
+    DockingWorker().run()
