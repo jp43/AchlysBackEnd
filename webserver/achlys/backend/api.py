@@ -156,6 +156,8 @@ def build_job_info_json(selected_jobs):
             if j < len(chem_name_list) - 1:
                 chem_name_string_list.append(' , ')
         chem_name_string = ''.join(chem_name_string_list)
+        job_status = 'UNKNOWN'
+        percent_done = 0.0
         response_data_list.append('{ ')
         response_data_list.append('"job_id" : %d' % job_id)
         response_data_list.append(' , ')
@@ -165,6 +167,10 @@ def build_job_info_json(selected_jobs):
         response_data_list.append(' , ')
         response_data_list.append('"chemical_names" : [ %s ]' % 
                 chem_name_string)
+        response_data_list.append(' , ')
+        response_data_list.append('"status" : "%s"' % job_status)
+        response_data_list.append(' , ')
+        response_data_list.append('"percent_done" : "%.1f"' % percent_done)
         response_data_list.append(' }')
         if i < num_jobs - 1:
             response_data_list.append(' , ')
