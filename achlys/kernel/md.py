@@ -3,34 +3,33 @@ from __future__ import with_statement
 import sys
 import os
 import subprocess
-import tempfile
 import shutil
 import argparse
-import logging
 import time
 import ConfigParser
-import numpy as np
 
-from achlys.kernel import docking
+import amber
+import NAMD
 
 known_programs = ['namd']
+known_steps = ['startup', 'min', 'equil']
 
-class MDAchlysConfigError(Exception):
+class MDConfigError(Exception):
     pass
 
-class MDAchlysConfig(object):
+class MDConfig(object):
 
-    def __init__(self, config_file):
+    def __init__(self, args):
 
         config = ConfigParser.SafeConfigParser()
-        config.read(config_file)
+        config.read(args.config_file)
 
         self.system = config.get('GENERAL', 'system').lower()
 
         if config.has_option('MD', 'program'):
             program = config.get('MD', 'program').lower()
             if program not in known_programs:
-                raise DockingConfigError('program option should be one of ' + ', '.join(known_programs))
+                raise MDConfigError('program option should be one of ' + ', '.join(known_programs))
             self.program = program
         else:
             self.program = 'namd'
@@ -39,58 +38,66 @@ class MDAchlysConfig(object):
             if config.has_section('AMBER'):
                 self.amber_options = dict(config.items('AMBER'))
             else:
-                self.autodock_options = {}
+                self.amber_options = {}
             if config.has_section('NAMD'):
                 self.namd_options = dict(config.items('NAMD'))
             else:
                 self.namd_options = {}
 
-        self.docking = docking.DockingConfig(config_file)
+        steps = {}
+        for step in args.steps:
+            if step not in known_steps:
+                raise ValueError("Step unknown: %s"%step)
+        for step in known_steps:
+            if step in args.steps:
+                steps[step] = True
+            else:
+                steps[step] = False
 
-class MDAchlysWorker(object):
+        self.steps = steps
+        self.check_starting_files(args)
 
-    def prepare_tleap_input_file(self, config, net_charge, options=None):
+    def check_starting_files(self, args):
 
-        nnas = int(148)
-        ncls = int(136 + net_charge)
+        steps = self.steps
 
-        # write tleap input file
-        with open('leap.in', 'w') as file:
-            script ="""source leaprc.ff99SB
-source leaprc.gaff
-loadamberprep lig.prepin
-loadamberparams lig.frcmod
-p = loadPdb complex.pdb
-charge p
-bond p.995.SG p.397.SG
-bond p.907.SG p.230.SG
-bond p.142.SG p.740.SG
-bond p.652.SG p.485.SG
-bond p.291.SG p.287.SG
-bond p.797.SG p.801.SG
-bond p.32.SG p.36.SG
-bond p.542.SG p.546.SG
-solvatebox p TIP3PBOX 10
-addions p Na+ %(nnas)s Cl- %(ncls)s
-charge p
-saveAmberParm p start.prmtop start.inpcrd
-savepdb p start.pdb
-quit"""% locals()
-            file.write(script)
+        if steps['startup'] or steps['min'] or steps['equil']:
+            if not os.path.isdir('common'):
+                raise MDConfigError('folder "common" not found!')
+
+        if steps['startup']:
+            if not os.path.exists('common/lig.pdb'):
+                raise MDConfigError('file "common/lig.pdb" not found!')
+
+            elif not os.path.exists('common/complex.pdb'):
+                raise MDConfigError('file "common/complex.pdb" not found!')
+
+        if not steps['startup'] and (steps['min'] or steps['equil']):
+            if not os.path.exists('common/leap.log'):
+                raise MDConfigError('file "common/leap.log" not found!')
+
+            elif not os.path.exists('common/posres.pdb'):
+                raise MDConfigError('file "common/posres.pdb" not found!')
+
+        if not steps['min'] and steps['equil']:
+            if not os.path.exists('min/end-min.pdb'):
+                raise MDConfigError('file "min/end-min" not found!')
+
+class MDWorker(object):
 
     def create_arg_parser(self):
 
         parser = argparse.ArgumentParser(description='Run Achlys MD simulation..')
 
-        parser.add_argument('cpu_id',
-            metavar='CPU ID',
-            type=int,
-            help='CPU ID')
+        parser.add_argument('steps',
+            type=str,
+            help='step (startup, min, equil)',
+            nargs='+')
 
-        parser.add_argument('ncpus',
-            metavar='number of cpus',
+        parser.add_argument('--ncpus',
+            metavar='ncpus',
             type=int,
-            help='total number of cpus used per MD simulations')
+            help='total number of cpus used')
 
         parser.add_argument('-f',
             dest='config_file',
@@ -98,171 +105,64 @@ quit"""% locals()
 
         return parser
 
-    def run_startup(self, args, config):
+    def run_startup(self, config):
 
         curdir = os.getcwd()
-        workdir = 'startup'
-        os.chdir(workdir)
+        if config.program == 'namd':
+            os.chdir('common') 
+            amber.run_startup(config, namd=True)
+            os.chdir(curdir)
 
-        if config.program in ['namd', 'amber']:
-            # read net charge from charge.txt
-            net_charge = np.loadtxt('charge.txt')
-            # call antechamber
-            subprocess.call('antechamber -i lig.pdb -fi pdb -o lig.prepin -fo prepi \
-                -j 4 -at gaff -c gas -du y -s 1 -pf y -nc %.1f > antchmb.log'%net_charge, shell=True)
-            # create starting structure
-            subprocess.call('parmchk -i lig.prepin -f prepi -o lig.frcmod', shell=True)
-            self.prepare_tleap_input_file(config, net_charge)
-            subprocess.call('tleap -f leap.in', shell=True)
+    def prepare_minimization_no_startup(self, config):
 
-            # create ref-heat.pdb file
-            with open('start.pdb', 'r') as startfile:
-                with open('ref-heat.pdb', 'w') as refheatfile:
-                    for line in startfile:
-                        if line.startswith(('ATOM', 'HETATM')):
-                            atom_name = line[12:16].strip()
-                            res_name = line[17:20].strip()
-                            if 'WAT' in res_name: # water molecules
-                                newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                            elif 'LIG' in res_name: # atoms of the ligand
-                                if atom_name.startswith(('C', 'N', 'O')):
-                                    newline = line[0:30] + '%8.3f'%50.0 + line[38:]
-                                else:
-                                    newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                            else: # atoms of the protein
-                                if atom_name in ['C', 'CA', 'N', 'O']:
-                                    newline = line[0:30] + '%8.3f'%50.0 + line[38:]
-                                else:
-                                    newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                        else:
-                            newline = line
-                        print >> refheatfile, newline.replace('\n','')
-        os.chdir(curdir)
+        curdir = os.getcwd()
+        if config.program == 'namd':
+            os.chdir('common')
+            amber.update_box_dimensions(config)
+            os.chdir(curdir)
 
     def run_minimization(self, args, config):
-
         curdir = os.getcwd()
-        workdir = 'min'
-        shutil.rmtree(workdir, ignore_errors=True)
-        os.mkdir(workdir)
-        os.chdir(workdir)
-
         if config.program == 'namd':
-            achlysdir = os.path.realpath(__file__)
-            namddir = '/'.join(achlysdir.split('/')[:-6]) + '/share/params/namd'
+            shutil.rmtree('min', ignore_errors=True)
+            os.mkdir('min'); os.chdir('min')
+            NAMD.run_minimization(args.ncpus, config)
+            os.chdir(curdir)
 
-            # use leap.log to find the dimensions of the box
-            with open('../startup/leap.log', 'r') as logfile:
-                for line in logfile:
-                    line_s = line.strip()
-                    if line_s.startswith('Total bounding box'):
-                        box = map(float,line_s.split()[-3:])
-
-            # prepare input file
-            with open(namddir + '/min.conf', 'r') as minfile_ref:
-                with open('min.conf', 'w') as minfile:
-                    for line in minfile_ref:
-                        if line.startswith('cellBasisVector1'):
-                            print >> minfile, 'cellBasisVector1  %5.3f       0.0        0.0'%(box[0]+0.5)
-                        elif line.startswith('cellBasisVector2'):
-                            print >> minfile, 'cellBasisVector2    0.0       %5.3f      0.0'%(box[1]+0.5)
-                        elif line.startswith('cellBasisVector3'):
-                            print >> minfile, 'cellBasisVector3    0.0         0.0      %5.3f'%(box[2]+0.5)
-                        else:
-                            print >> minfile, line.replace('\n', '')
-
-            subprocess.call('mpirun -np ' + str(args.ncpus) + ' namd2 min.conf', shell=True)
-
-            # use ptraj to convert .dcd file to .pdb
-            with open('ptraj.in', 'w') as prmfile:
-                print >> prmfile, 'trajin  min.dcd 1 1 1'
-                print >> prmfile, 'trajout run.pdb PDB'
-            subprocess.call('ptraj ../startup/start.prmtop < ptraj.in > ptraj.out', shell=True)
-            shutil.move('run.pdb.1', 'end-min.pdb')
-
-        os.chdir(curdir)
-
-    def run_heating(self, args, config):
-
+    def run_nvt(self, args, config):
         curdir = os.getcwd()
-        workdir = 'heat'
-        shutil.rmtree(workdir, ignore_errors=True)
-        os.mkdir(workdir)
-        os.chdir(workdir)
-
         if config.program == 'namd':
-            achlysdir = os.path.realpath(__file__)
-            namddir = '/'.join(achlysdir.split('/')[:-6]) + '/share/params/namd'
+            shutil.rmtree('nvt', ignore_errors=True)
+            os.mkdir('nvt'); os.chdir('nvt')
+            NAMD.run_nvt(args.ncpus, config)
+            os.chdir(curdir)
 
-            shutil.copyfile(namddir + '/heat.conf','heat.conf')
-            subprocess.call('mpirun -np ' + str(args.ncpus) + ' namd2 heat.conf', shell=True)
-
-            # use ptraj to convert .dcd file to .pdb
-            with open('ptraj.in', 'w') as prmfile:
-                print >> prmfile, 'trajin heat.dcd 1 1 1'
-                print >> prmfile, 'trajout run.pdb PDB'
-            subprocess.call('ptraj ../startup/start.prmtop < ptraj.in > ptraj.out', shell=True)
-            shutil.move('run.pdb.1', 'end-heat.pdb')
-
-        os.chdir(curdir)
-
-    def run_equilibration(self, args, config):
-
+    def run_npt(self, args, config):
         curdir = os.getcwd()
-        workdir = 'equ'
-        shutil.rmtree(workdir, ignore_errors=True)
-        os.mkdir(workdir)
-        os.chdir(workdir)
-
         if config.program == 'namd':
-            achlysdir = os.path.realpath(__file__)
-            namddir = '/'.join(achlysdir.split('/')[:-6]) + '/share/params/namd'
-
-            shutil.copyfile(namddir + '/equ.conf', 'equ.conf')
-            subprocess.call('mpirun -np ' + str(args.ncpus) + ' namd2 equ.conf', shell=True)
-
-            # use ptraj to extract the last frame  .dcd file to .pdb
-            with open('ptraj.in', 'w') as prmfile:
-                print >> prmfile, 'trajin equ.dcd 10 10 1'
-                print >> prmfile, 'trajout run.pdb PDB'
-            subprocess.call('ptraj ../startup/start.prmtop < ptraj.in > ptraj.out', shell=True)
-            shutil.move('run.pdb.10', 'end-equ.pdb')
-
-        os.chdir(curdir)
+            shutil.rmtree('npt', ignore_errors=True)
+            os.mkdir('npt'); os.chdir('npt')
+            NAMD.run_npt(args.ncpus, config)
+            os.chdir(curdir)
 
     def run(self):
 
         parser = self.create_arg_parser()
         args = parser.parse_args()
 
-        if args.cpu_id == 0:
-            logging.basicConfig(filename='achlys.log',
-                            filemode='a',
-                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
-                            datefmt="%H:%M:%S",
-                            level=logging.DEBUG)
+        config = MDConfig(args)
 
-            tcpu1 = time.time()
-            logging.info('Starting MD (pose %i)...'%args.cpu_id)
+        if config.steps['startup']:
+            self.run_startup(config)
+        elif config.steps['min'] or config.steps['equil']:
+            self.prepare_minimization_no_startup(config)
 
-        config = MDAchlysConfig(args.config_file)
+        if config.steps['min']:
+            self.run_minimization(args, config)
 
-        curdir = os.getcwd()
-        workdir = 'md-pose%i'%args.cpu_id
-        os.chdir(workdir)
+        if config.steps['equil']:
+            self.run_nvt(args, config)
+            self.run_npt(args, config)
 
-        # (A) start-up
-        self.run_startup(args, config)
-
-        # (B) minization
-        self.run_minimization(args, config)
-
-        # (C) heating
-        self.run_heating(args, config)
-
-        # (D) equilibration
-        self.run_equilibration(args, config)
-
-        if args.cpu_id == 0:
-            tcpu2 = time.time()
-            logging.info('MD simulations done (pose %i). Total time needed: %i s.'%(args.cpu_id, tcpu2-tcpu1))
+if __name__ == '__main__':
+    MDWorker().run()
