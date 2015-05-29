@@ -63,10 +63,8 @@ def check_import(pkgname, pkgver):
     globals()[pkgname] = mod
 
 setup(name='Achlys',
-      packages=['achlys', 'achlys.kernel'],
-      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/PDB/*.pdb')]), 
-          ('share/params/amber', ['params/amber/leap.in']),
-          ('share/params/namd', ['params/namd/' + file for file in ['min.conf', 'heat.conf', 'equ.conf']])],
+      packages=['achlys', 'achlys.kernel', 'achlys.mdconfigs'],
+      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/PDB/*.pdb')])],
       scripts = ['bin/start_job', 'bin/check_job'],
       license='LICENSE.txt',
       description='AchlysBackEnd package',
