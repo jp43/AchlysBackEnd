@@ -32,6 +32,7 @@ def submit_docking_job(jobid, nligs, ntargets, submit_on='pharma'):
     # the following path is supposed to exist on the remote machine
     remote_path = 'tmp/results'
     workdir = 'job_' + jobid
+
     remote_dir = remote_path + '/' + workdir
 
     fh, tmp = tempfile.mkstemp(suffix='.sh')
@@ -61,7 +62,7 @@ mkdir targets
     py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/kernel/docking.py'
 
     subprocess.call("scp config.ini run_docking.sge %s pharma:%s/"%(py_docking_script,remote_dir), shell=True)
-    #time.sleep(5) # wait 5 sec to avoid freezing when using many scp's
+    time.sleep(5) # wait 5 sec to avoid freezing when using many scp's
 
     shutil.rmtree('run_docking.sge', ignore_errors=True)
 
@@ -69,7 +70,6 @@ mkdir targets
     fh, tmp = tempfile.mkstemp(suffix='.sh')
     with open(tmp, 'w') as file:
         script ="""source ~/.bash_profile
-
 cd %(remote_dir)s
 
 for lig_id in `seq 1 %(nligs)s`; do
@@ -86,7 +86,6 @@ done
 
 # clean up work directory
 rm -rf ligs targets config.ini run_docking.sge docking.py
-
 """% locals()
         file.write(script)
 
@@ -112,21 +111,14 @@ done
         file.write(script)
 
     subprocess.call("ssh pharma 'bash -s' < " + tmp, shell=True)
+    return 'running'
 
-def check_docking(jobid, ligs_idxs, ntargets, submitted_on='pharma'):
-
+def write_check_docking_script(remote_dir, ligs_idxs):
     ligs_idxs_bash = ' '.join(map(str,ligs_idxs))
 
-    # the following path is supposed to exist on the remote machine
-    remote_path = 'tmp/results'
-    workdir = 'job_' + jobid
-    remote_dir = remote_path + '/' + workdir
-
-    # check if the docking for the ligands specified in ligs_idxs are still running according to qstat
     fh, tmp = tempfile.mkstemp(suffix='.sh')
     with open(tmp, 'w') as file:
-        script ="""set -e
-source ~/.bash_profile
+        script ="""source ~/.bash_profile
 cd %(remote_dir)s
 
 for lig_id in %(ligs_idxs_bash)s; do
@@ -137,52 +129,50 @@ for lig_id in %(ligs_idxs_bash)s; do
     else
       echo -1
     fi
-  done
+  done 
   echo
   cd ..
 done
 """% locals()
         file.write(script)
+    return tmp
 
-    output = subprocess.check_output("ssh pharma 'bash -s' < " + tmp, shell=True)
+def get_docking_status(output):
+
     output = output.split('\n')[:-1]
 
-    print output
-
-    # analyze the output of the ssh command
-    outputs_ligs = []
+    outputs = []
     tmp = []
     for item in output:
-        if item == '': 
-            outputs_ligs.append(tmp)
+        if item == '':
+            outputs.append(tmp)
             tmp = []
         else:
-            tmp.append(item)  
+            tmp.append(item)
 
-    status_ligs = []
-    for outputs in outputs_ligs:
-        outputs_int = map(int, outputs)
-        if [idx for idx, step in enumerate(outputs_int) if step > 0]:
-            status_ligs.append(1)
-        elif [idx for idx, step in enumerate(outputs_int) if step < 0]:
-            status_ligs.append(-1)
+    status = []
+    for output_l in outputs:
+        output_l_int = map(int, output_l)
+        if [idx for idx, step in enumerate(output_l_int) if step > 0]:
+            status.append(1)
+        elif [idx for idx, step in enumerate(output_l_int) if step < 0]:
+            status.append(-1)
         else:
-            status_ligs.append(0)
+            status.append(0)
+
+    return status
+
+def check_docking(jobid, ligs_idxs, ntargets, submitted_on='pharma'):
+
+    # the following path is supposed to exist on the remote machine
+    remote_path = 'tmp/results'
+    workdir = 'job_' + jobid
+
+    remote_dir = remote_path + '/' + workdir
+
+    scriptname = write_check_docking_script(remote_dir, ligs_idxs)
+
+    output = subprocess.check_output("ssh pharma 'bash -s' < " + scriptname, shell=True)
+    status = get_docking_status(output)
 
     return status_ligs
-
-#    # check if the docking for the ligands specified in ligs_idxs are still running according to qstat
-#    fh, tmp = tempfile.mkstemp(suffix='.sh')
-#    with open(tmp, 'w') as file:
-#        script ="""source ~/.bash_profile
-#
-#cd %(remote_dir)s
-#  jobid=`cat jobID` 
-#  if [[ -n `mjobs | grep $jobid | grep "1 $((lig_id+1))"` ]]; then
-#    echo 1
-#  else
-#    echo 0
-#  fi
-#done
-#"""% locals()
-#        file.write(script)

@@ -20,14 +20,7 @@ from achlys import struct_tools
 known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
 known_systems = ['herg']
 
-STEP_INIT_DONE = 0
-STEP_PREP = 1
-STEP_DOCK = 2
-STEP_MD = 3
-STEP_MMPBSA = 4
-STEP_ANALYSIS = 5
-
-STATUS_DONE = 'DONE'
+known_steps = ['init', 'dock', 'md', 'mmpbsa', 'analysis']
 
 class StartJobError(Exception):
     pass
@@ -35,7 +28,6 @@ class StartJobError(Exception):
 class StartJob(object):
 
     def initialize(self, args):
-
         global known_formats
         global known_systems
 
@@ -45,30 +37,28 @@ class StartJob(object):
         # check files related to the ligands
         if args.input_files_l:
             # get extension if file names provided are correct
+            input_files_l = args.input_files_l
             ext_l = self.get_format(args.input_files_l)
             if ext_l == '.pdb':
-                input_files_l = args.input_files_l
-                nligs = len(input_files_l)
                 # This code assumes only one structure in each PDB file
                 # That is normally the case but the PDB format allows multiple MODELs
+                nligs = len(args.input_files_l)
             elif ext_l == '.sdf':
-                input_files_l = args.input_files_l
                 # I will support multiple SDF files each with multiple structures
                 nligs = 0
-                for input_file_path in input_files_l:
+                for input_file_path in args.input_files_l:
                     nligs += struct_tools.count_structs_sdf(input_file_path)
             elif ext_l == '.mol':
                 # .mol is used for MDL MOLfile format but also some other chemical formats
                 # MDL MOLfile format is similar to MDL SDFile format but only 1 structure per file
                 # (SDF is a container for multiple MOL)
-                input_files_l = args.input_files_l
-                nligs = len(input_files_l)
+                nligs = len(args.input_files_l)
             elif ext_l == '.smi' or ext_l == '.txt':
                 # SMILES files sometimes have the .txt extension
                 # But .txt could also be used for many other formats
                 # I will support multiple SMILES files each with multiple structures
                 nligs = 0
-                for input_file_path in input_files_l:
+                for input_file_path in args.input_files_l:
                     nligs += struct_tools.count_structs_smi(input_file_path)
             else:
                 raise StartJobError("format of input files should be among " + ", ".join(known_formats))
@@ -79,15 +69,15 @@ class StartJob(object):
             else:
                 raise StartJobError('No files for ligands provided')
 
-        self.nligs = nligs
         self.input_files_l = input_files_l
+        self.nligs = nligs
         self.ext_l = ext_l
 
         # check files related to the targets
         if args.input_files_r:
-            # get extension if file names provided are correct
-            ext_r = self.get_format(args.input_files_r)
             input_files_r = args.input_files_r
+            # get extension if file names provided are correct
+            ext_r = self.get_format(input_files_r)
             if ext_r == '.pdb':
                 ntargets = len(input_files_r)
             else:
@@ -107,8 +97,8 @@ class StartJob(object):
             else:
                 raise StartJobError('No files for targets provided')
 
-        self.ntargets = ntargets
         self.input_files_r = input_files_r
+        self.ntargets = ntargets
         self.ext_r = ext_r
 
         self.jobid = self.create_job_directory(args)
@@ -131,82 +121,39 @@ class StartJob(object):
 
         # copy config file
         shutil.copyfile(args.config_file, workdir +'/config.ini')
-
-        # create hidden files to put intermediate scripts
-        os.mkdir(workdir+'/.scripts')
-
-        ## copy ligand files
-        #for idx, file_l in enumerate(self.input_files_l):
-        #    dir_l = workdir+'/lig%i'%idx
-        #    # make ligand directory
-        #    os.mkdir(dir_l)
-        #    # copy file 
-        #    shutil.copyfile(file_l,dir_l+'/lig%i'%idx+self.ext_l)
-        #    # copy current step
-        #    stf = open(dir_l+'/step', 'w')
-        #    stf.write('%d' % STEP_INIT_DONE)
-        #    stf.close()
         
-        # I convert everything to SDF format
-
+        # convert everything to SDF format
         ext_l = self.get_format(self.input_files_l)
         lig_idx = 0
         for file_l in self.input_files_l:
+            dir_l = workdir+'/lig%i'%lig_idx
+            # make ligand directory
+            os.mkdir(dir_l)
             if ext_l == '.pdb':
-                dir_l = workdir+'/lig%i'%lig_idx
-                # make ligand directory
-                os.mkdir(dir_l)
                 # Convert and copy file
-                os.system('babel -ipdb %s -osdf %s 2>/dev/null' % 
-                        (file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
-                # copy current step
-                stf = open(dir_l+'/step', 'w')
-                stf.write('%d' % STEP_INIT_DONE)
-                stf.close()
-                lig_idx += 1
+                os.system('babel -ipdb %s -osdf %s 2>/dev/null' %(file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
             elif ext_l == '.sdf':
                 nligs_sdf = struct_tools.count_structs_sdf(file_l)
                 for idx_sdf in range(nligs_sdf):
-                    dir_l = workdir+'/lig%i'%lig_idx
-                    # make ligand directory
-                    os.mkdir(dir_l)
                     # Convert and copy file
-                    os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' % 
-                            (file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
+                    os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' \
+                        %(file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
                     # copy current step
-                    stf = open(dir_l+'/step', 'w')
-                    stf.write('%d' % STEP_INIT_DONE)
-                    stf.close()
-                    lig_idx += 1
             elif ext_l == '.mol':
-                dir_l = workdir+'/lig%i'%lig_idx
-                # make ligand directory
-                os.mkdir(dir_l)
                 # Convert and copy file
-                os.system('babel -imol %s -osdf %s 2>/dev/null' % 
-                        (file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
-                # copy current step
-                stf = open(dir_l+'/step', 'w')
-                stf.write('%d' % STEP_INIT_DONE)
-                stf.close()
-                lig_idx += 1
+                os.system('babel -imol %s -osdf %s 2>/dev/null' % (file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
             elif ext_l == '.smi' or ext_l == '.txt':
                 nligs_smi = struct_tools.count_structs_sdf(file_l)
                 for idx_smi in range(nligs_smi):
-                    dir_l = workdir+'/lig%i'%lig_idx
-                    # make ligand directory
-                    os.mkdir(dir_l)
                     # Convert and copy file 
-                    os.system('babel -ismi %s -f%d -l%d -osmi %s 2>/dev/null' % 
-                            (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
-                    # copy current step
-                    stf = open(dir_l+'/step', 'w')
-                    stf.write('%d' % STEP_INIT_DONE)
-                    stf.close()
-                    lig_idx += 1
-            else:
-                raise StartJobError("format of input files should be among " + ", ".join(known_formats))
+                    os.system('babel -ismi %s -f%d -l%d -osmi %s 2>/dev/null' \
+                        %(file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
 
+            # copy current step
+            stf = open(dir_l+'/step.out', 'w')
+            stf.write('start step 0 (init)')
+            stf.close()
+            lig_idx += 1
 
         # copy targets
         dir_r = workdir+'/targets'
@@ -224,13 +171,11 @@ class StartJob(object):
             dest='input_files_l',
             nargs='*',
             help = 'Ligand coordinate file(s): .pdb, .sdf')
-
         parser.add_argument('-r',
             type=str,
             dest='input_files_r',
             nargs='*',
             help = 'Receptor coordinate file(s): .pdb')
- 
         parser.add_argument('-f',
             dest='config_file',
             required=True,
@@ -258,7 +203,7 @@ class StartJob(object):
         args = parser.parse_args()
         self.initialize(args)
         # start cron job
-        subprocess.call('(crontab -l ; echo "* * * * * check_job --id %s")| crontab'%self.jobid, shell=True)
+        #subprocess.call('(crontab -l ; echo "* * * * * check_job --id %s")| crontab'%self.jobid, shell=True)
         print '%s' % self.jobid
 
 class CheckJobError(Exception):
@@ -269,8 +214,7 @@ class CheckJob(object):
     def initialize(self, args):
 
         self.jobid = args.jobid
-        self.basejobdir = '/home/pwinter/Achlys/jobs/'
-        self.workdir = self.basejobdir + 'job_' + self.jobid
+        self.workdir = 'job_' + self.jobid
 
         # check number of ligands
         nligs = 0
@@ -284,19 +228,41 @@ class CheckJob(object):
             ntargets += 1
         self.ntargets = ntargets
 
-        current_step = []
+        status = []
+        steps = []
+
         # check current step
         for lig_idx in range(nligs):
-            with open(self.workdir+'/lig%i/step'%lig_idx, 'r') as stf:
-                current_step.append(int(stf.next()))
-        self.current_step = current_step
+            with open(self.workdir+'/lig%i/step.out'%lig_idx, 'r') as stf:
+                line = stf.next().split()
+                status.append(line[0])
+                steps.append(int(line[2]))
 
-    # I've changed how this work, now it updates the step file to given step
-    # I don't assume that each ligand will advance by 1 step each time it is called
-    def update_step_file(self, lig_id, step):
+        self.status = status
+        self.steps = steps
 
-        with open('lig%i/step'%lig_id, 'w') as file_l:
-            print >> file_l, step
+    def update_step(self, lig_id, status_lig):
+
+        step_lig = self.steps[lig_id]
+
+        if step_lig == known_steps[-1] and status_lig == 'done':
+            new_step_lig = step_lig
+            new_status_lig = 'done' # the procedure is done
+        elif status_lig == 'done':
+            new_step_lig = step_lig + 1
+            new_status_lig = 'start'
+        elif status_lig == 'error': # error encounter
+            new_step_lig = step_lig
+            new_status_lig = 'error'
+        elif status_lig == 'running': # job still running
+            new_step_lig = step_lig
+            new_status_lig = 'running'
+
+        with open('lig%i/step.out'%lig_id, 'w') as file:
+            print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[step_lig]
+
+        self.steps[lig_id] = new_step_lig
+        self.status[lig_id] = new_status_lig
 
     def create_arg_parser(self):
         parser = argparse.ArgumentParser(description="Run CheckJob...")
@@ -314,32 +280,27 @@ class CheckJob(object):
         args = parser.parse_args()
         self.initialize(args)
 
-        logfile = open(self.basejobdir+'checkjoblog', 'a')
-        logfile.write('Running checkjob for %s at %s\n' % (self.jobid, datetime.datetime.now()))
-        logfile.close()
+        #logfile = open(self.basejobdir+'checkjoblog', 'a')
+        #logfile.write('Running checkjob for %s at %s\n' % (self.jobid, datetime.datetime.now()))
+        #logfile.close()
 
         os.chdir(self.workdir)
 
-        # If a ligand is in step STEP_INIT_DONE, submit a prep job
+        # If a ligand is in step 0, submit a prep job
         for lig_id in range(self.nligs):
-            if self.current_step[lig_id] == STEP_INIT_DONE:
-                prep.submit_prep_job(self.jobid, lig_id, submit_on='local')
-                self.update_step_file(lig_id, STEP_PREP)
-                self.current_step[lig_id] = STEP_PREP
-            
-        # If a ligand is in step STEP_PREP, check if prep is done
-        prep_status_list = []
-        for lig_id in range(self.nligs):
-            if self.current_step[lig_id] == STEP_PREP:
-                prep_status_list.append(prep.check_prep_job(self.jobid, lig_id, submit_on='local'))
-            else:
-                prep_status_list.append('NOT_IN_PREP_STEP')
+            if self.steps[lig_id] == 0:
+                if self.status[lig_id] == 'start':
+                    status_lig = prep.submit_prep_job(self.jobid, lig_id, submit_on='local') 
+                    self.update_step(lig_id, status_lig)
+                if self.status[lig_id] == 'running':
+                    status_lig = prep.check_prep_job(self.jobid, lig_id, submit_on='local')
+                    self.update_step(lig_id, status_lig)
         
-        # If all ligands are processed, then submit docking job and advance to STEP_DOCK
-        if all(prep_status == 'DONE' for prep_status in prep_status_list):
-            docking.submit_docking_job(self.jobid, self.nligs, self.ntargets, submit_on='pharma')
-            self.current_step[lig_id] = STEP_DOCK
-            self.update_step_file(lig_id, STEP_DOCK)
+        # If all ligands are done with step 0, then submit docking job and advance to step 1
+        if all([self.status[lig_id] == 'start' and self.steps[lig_id] == 1 for lig_id in range(self.nligs)]):
+            status = docking.submit_docking_job(self.jobid, self.nligs, self.ntargets, submit_on='pharma')
+            for lig_id in range(self.nligs):
+                self.update_step(lig_id, status)
         
         ## check ligands in step STEP_DOCK
         #ligs_idxs = [idx for idx, step in enumerate(self.current_step) if step == STEP_PREP]

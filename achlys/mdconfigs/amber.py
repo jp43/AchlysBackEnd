@@ -1,14 +1,16 @@
+import sys
+
 import subprocess
 import NAMD
 
 def run_startup(config, namd=False):
 
     # call antechamber
-    subprocess.call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
+    subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
     # create starting structure
-    subprocess.call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
+    subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
     prepare_tleap_input_file()
-    subprocess.call('tleap -f leap.in > leap.log', shell=True)
+    subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
     # check box dimensions
     update_box_dimensions(config)
@@ -21,7 +23,7 @@ def run_startup(config, namd=False):
                 netcharge = float(newline[-1])
 
     prepare_tleap_input_file(netcharge=netcharge)
-    subprocess.call('tleap -f leap.in > leap.log', shell=True)
+    subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
     if namd:
         NAMD.create_constrained_pdbfile()
@@ -35,8 +37,10 @@ def update_box_dimensions(config):
             if line_s.startswith('Total bounding box'):
                 box = map(float,line_s.split()[-3:])
 
-    config.box = box
-    config.pmegridsize = [int(size/0.9) if int(size/0.9)%2 == 0 else int(size/0.9) + 1 for size in box]
+    frac_pmegridsize = 0.9
+
+    config.box = [size + 2.0 for size in box]
+    config.pmegridsize = [int(size/frac_pmegridsize) if int(size/frac_pmegridsize)%2 == 0 else int(size/frac_pmegridsize) + 1 for size in config.box]
 
 def prepare_tleap_input_file(netcharge=0):
 

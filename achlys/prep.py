@@ -2,6 +2,7 @@ import sys
 import os
 import shutil
 import subprocess
+
 from achlys import struct_tools
 
 # Convert SDF to 3D PDB file
@@ -13,7 +14,6 @@ def convert_sdf_to_pdb(inpath, outpath):
 def convert_sdf_to_png(inpath, outpath):
     cmd = '(babel -isdf %s -d ---errorlevel 1 -opng %s 2>/dev/null ; echo $? > convert_png_status) &' % (inpath, outpath)
     os.system(cmd)
-
 
 def submit_prep_job(jobid, lig_id, submit_on='local'):
     
@@ -27,37 +27,26 @@ def submit_prep_job(jobid, lig_id, submit_on='local'):
     convert_sdf_to_pdb('lig%d.sdf' % lig_id, 'lig%d.pdb' % lig_id)        
 
     os.chdir('..')
-
+    return 'running'
 
 def check_prep_job(jobid, lig_id, submit_on='local'):
     
     if submit_on != 'local':
-        print 'Unsupported system for prep job'
-        sys.exit(1)
-        
-    status = 'DONE'
-    
+        raise ValueError('Unsupported system for prep job')
+
     os.chdir('lig%d' % lig_id)
 
-    if(os.path.exists('convert_png_status')):
-        with open ("convert_png_status", "r") as myfile:
-            if myfile.read().strip() == '0':
-                status = 'DONE'
-            else:
-                status = 'ERROR'
-    else:
-        if status != 'ERROR':
-            status = 'RUNNING'
+    status = 'done'
 
     if(os.path.exists('convert_pdb_status')):
         with open ("convert_pdb_status", "r") as myfile:
             if myfile.read().strip() == '0':
-                status = 'DONE'
+                status = 'done'
             else:
-                status = 'ERROR'
+                status = 'error'
     else:
-        if status != 'ERROR':
-            status = 'RUNNING'
+        if status != 'error':
+            status = 'running'
 
     os.chdir('..')
 

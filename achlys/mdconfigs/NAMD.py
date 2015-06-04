@@ -1,6 +1,9 @@
 import os
 import sys
 import subprocess
+import tempfile
+import uuid
+import time
 import shutil
 
 def create_constrained_pdbfile():
@@ -27,7 +30,57 @@ def create_constrained_pdbfile():
                     newline = line
                 print >> posresfile, newline.replace('\n','')
 
-def write_minimization_config_file(config, nstepsmin=5000, temperature=310.0, amber=True, **kwargs):
+def run(args, config, step):
+
+    config_file_name = step + '.conf'
+    dcd_file_name = step + '.dcd'
+
+    config_file_func_name = 'write_' + step + '_config_file'
+    config_file_func = getattr(sys.modules[__name__], config_file_func_name)
+
+    config_file_func(config, **config.namd_options)
+
+    if args.build:
+        return
+
+    if args.bgq:
+        subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 :\
+ /scinet/bgq/src/namd/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2 ' + config_file_name, shell=True) 
+        ptrajdir = 'tmp/.ptraj-' + str(uuid.uuid4()).split('-')[0]
+        subprocess.check_call("ssh pharma 'mkdir %s'"%ptrajdir, shell=True)
+        subprocess.check_call("scp " + dcd_file_name + " ../common/start.prmtop pharma:" + ptrajdir, shell=True)
+        fh, tmp = tempfile.mkstemp(suffix='.sh')
+
+        with open(tmp, 'w') as file:
+            script ="""source ~/.bash_profile
+# create ptraj directory
+cd $HOME
+cd %(ptrajdir)s
+
+# write ptraj config file
+echo "trajin %(step)s.dcd 1 1 1" > ptraj.in
+echo "trajout run.pdb PDB" >> ptraj.in
+
+ptraj start.prmtop < ptraj.in > ptraj.out
+cat run.pdb.1
+
+# remove directory
+cd $HOME
+rm -rf %(ptrajdir)s"""% locals()
+            file.write(script)
+ 
+        subprocess.check_call("ssh pharma 'bash -s' < " + tmp + " > run.pdb.1", shell=True)
+    else:
+        subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + config_file_name, shell=True)
+        # use ptraj to convert .dcd file to .pdb
+        with open('ptraj.in', 'w') as prmfile:
+            print >> prmfile, 'trajin  min.dcd 1 1 1'
+            print >> prmfile, 'trajout run.pdb PDB'
+        subprocess.check_call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
+
+    shutil.move('run.pdb.1', 'end-%s.pdb'%step)
+
+def write_min_config_file(config, nstepsmin=5000, temperature=310.0, amber=True, **kwargs):
 
     box = config.box
 
@@ -81,6 +134,7 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
+margin              2.5
 
 # Integrator Parameters
 timestep            2.0
@@ -100,19 +154,6 @@ cellBasisVector3       0          0        %(boxz)5.3f
 # Minimization
 minimize           $nsteps"""% locals()
         file.write(script)
-
-
-def run_minimization(ncpus, config):
-
-    write_minimization_config_file(config, **config.namd_options)
-    subprocess.call('mpirun -np ' + str(ncpus) + ' namd2 min.conf', shell=True)
-
-    # use ptraj to convert .dcd file to .pdb
-    with open('ptraj.in', 'w') as prmfile:
-        print >> prmfile, 'trajin  min.dcd 1 1 1'
-        print >> prmfile, 'trajout run.pdb PDB'
-    subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
-    shutil.move('run.pdb.1', 'end-min.pdb')
 
 
 def write_nvt_config_file(config, nstepsnvt=5000, nrunsnvt=10, temperature=310, amber=True, **kwargs):
@@ -166,6 +207,8 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
+stepspercycle       10
+margin              5
 
 # Integrator Parameters
 timestep            2.0
@@ -195,18 +238,6 @@ for { set i 0 } { $i < $nruns } { incr i 1 } {
 }"""% locals()
         file.write(script)
 
-def run_nvt(ncpus, config):
-
-    write_nvt_config_file(config, **config.namd_options)
-    subprocess.call('mpirun -np ' + str(ncpus) + ' namd2 nvt.conf', shell=True)
-
-    # use ptraj to convert .dcd file to .pdb
-    with open('ptraj.in', 'w') as prmfile:
-        print >> prmfile, 'trajin  nvt.dcd 1 1 1'
-        print >> prmfile, 'trajout run.pdb PDB'
-    subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
-    shutil.move('run.pdb.1', 'end-nvt.pdb')
-
 def write_npt_config_file(config, nstepsnpt=5000, temperature=310, amber=True, **kwargs):
 
     pmegridsize = config.pmegridsize
@@ -216,7 +247,7 @@ def write_npt_config_file(config, nstepsnpt=5000, temperature=310, amber=True, *
     pmegridsizez = pmegridsize[2]
 
     if amber:
-        input_files_prms = """cwd             .
+        input_files_prms = """cwd                .
 amber              yes
 coordinates        ../nvt/end-nvt.pdb
 parmfile           ../common/start.prmtop
@@ -256,6 +287,8 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
+stepspercycle       10
+margin              5
 
 # Integrator Parameters
 timestep            2.0
@@ -267,7 +300,6 @@ PMEGridSizeX        %(pmegridsizex)i
 PMEGridSizeY        %(pmegridsizey)i
 PMEGridSizeZ        %(pmegridsizez)i
 
-# No constant pressure, since we will do constant volume simulation
 constraints         on
 consref             ../nvt/end-nvt.pdb
 conskfile           ../common/posres.pdb
@@ -289,14 +321,87 @@ LangevinPistonTemp	 $temperature
 run $nsteps"""% locals()
         file.write(script)
 
-def run_npt(ncpus, config):
+def write_md_config_file(config, nsteps=5000, outputfreq=5000, temperature=310, amber=True, plumed=False, **kwargs):
 
-    write_npt_config_file(config, **config.namd_options)
-    subprocess.call('mpirun -np ' + str(ncpus) + ' namd2 npt.conf', shell=True)
+    pmegridsize = config.pmegridsize
 
-    # use ptraj to convert .dcd file to .pdb
-    with open('ptraj.in', 'w') as prmfile:
-        print >> prmfile, 'trajin  npt.dcd 1 1 1'
-        print >> prmfile, 'trajout run.pdb PDB'
-    subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
-    shutil.move('run.pdb.1', 'end-npt.pdb')
+    pmegridsizex = pmegridsize[0]
+    pmegridsizey = pmegridsize[1]
+    pmegridsizez = pmegridsize[2]
+
+    if plumed:
+        plumed_prms = """
+plumed on
+plumedfile plumed.dat
+"""
+    else:
+        plumed_prms = ""
+
+    if amber:
+        input_files_prms = """cwd                .
+amber              yes
+coordinates        npt/end-npt.pdb
+parmfile           common/start.prmtop
+paraTypeXplor      off"""
+
+    else:
+        input_files_prms = """cwd                .
+structure           common/start.psf
+coordinates         npt/end-npt.pdb"""
+
+    with open('md.conf', 'w') as file:
+        script ="""# Production run
+%(plumed_prms)s
+set temperature      %(temperature)s
+set outputname       md
+set nsteps           %(nsteps)s
+set outputfreq       %(outputfreq)s
+
+# input files prms
+%(input_files_prms)s
+
+# starting from Restart Files
+set inputname      npt/npt
+binCoordinates     $inputname.coor
+binVelocities      $inputname.vel  
+extendedSystem     $inputname.xsc
+
+# output files parameters
+outputName          $outputname
+binaryoutput        yes
+restartfreq         $outputfreq
+dcdfreq             $outputfreq
+outputEnergies      $nsteps
+
+# Force-Field Parameters
+exclude             scaled1-4
+switching           on
+switchdist          10
+cutoff              12
+outputPairlists     100
+
+# Integrator Parameters
+timestep            2.0
+rigidBonds          all
+
+# PME (for full-system periodic electrostatics)
+PME                 yes
+PMEGridSizeX        %(pmegridsizex)i
+PMEGridSizeY        %(pmegridsizey)i
+PMEGridSizeZ        %(pmegridsizez)i
+
+# Constant temperature control (NVT)
+langevin            on
+langevinDamping     5
+langevinTemp        $temperature
+langevinHydrogen    off
+
+# constant pressure (NPT)
+LangevinPiston		 on
+LangevinPistonTarget	 1.01325
+LangevinPistonPeriod	 200
+LangevinPistonDecay	 100
+LangevinPistonTemp	 $temperature
+
+run $nsteps"""% locals()
+        file.write(script)
