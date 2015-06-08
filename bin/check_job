@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import achlys.job_manager as jm
+from achlys.kernel import job_manager as jm
 
 if __name__=='__main__':
     jm.CheckJob().run()
