@@ -14,8 +14,8 @@ import time
 import datetime
 
 from achlys import docking
-from achlys import prep
-from achlys import struct_tools
+from achlys.tools import prep
+from achlys.tools import struct_tools
 
 known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
 known_systems = ['herg']
@@ -121,39 +121,77 @@ class StartJob(object):
 
         # copy config file
         shutil.copyfile(args.config_file, workdir +'/config.ini')
-        
-        # convert everything to SDF format
+
+        ## copy ligand files
+        #for idx, file_l in enumerate(self.input_files_l):
+        #    dir_l = workdir+'/lig%i'%idx
+        #    # make ligand directory
+        #    os.mkdir(dir_l)
+        #    # copy file 
+        #    shutil.copyfile(file_l,dir_l+'/lig%i'%idx+self.ext_l)
+        #    # copy current step
+        #    stf = open(dir_l+'/step.out', 'w')
+        #    stf.write('start step 0 (init)')
+        #    stf.close()
+
         ext_l = self.get_format(self.input_files_l)
         lig_idx = 0
         for file_l in self.input_files_l:
-            dir_l = workdir+'/lig%i'%lig_idx
-            # make ligand directory
-            os.mkdir(dir_l)
             if ext_l == '.pdb':
+                dir_l = workdir+'/lig%i'%lig_idx
+                # make ligand directory
+                os.mkdir(dir_l)
                 # Convert and copy file
-                os.system('babel -ipdb %s -osdf %s 2>/dev/null' %(file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
+                os.system('babel -ipdb %s -osdf %s 2>/dev/null' % 
+                        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
+                # copy current step
+                stf = open(dir_l+'/step.out', 'w')
+                stf.write('start step 0 (init)')
+                stf.close()
+                lig_idx += 1
             elif ext_l == '.sdf':
                 nligs_sdf = struct_tools.count_structs_sdf(file_l)
                 for idx_sdf in range(nligs_sdf):
+                    dir_l = workdir+'/lig%i'%lig_idx
+                    # make ligand directory
+                    os.mkdir(dir_l)
                     # Convert and copy file
-                    os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' \
-                        %(file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
+                    os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' % 
+                            (file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
                     # copy current step
+                    stf = open(dir_l+'/step.out', 'w')
+                    stf.write('start step 0 (init)')
+                    stf.close()
+                    lig_idx += 1
             elif ext_l == '.mol':
+                dir_l = workdir+'/lig%i'%lig_idx
+                # make ligand directory
+                os.mkdir(dir_l)
                 # Convert and copy file
-                os.system('babel -imol %s -osdf %s 2>/dev/null' % (file_l, dir_l+'/lig%i'%lig_idx+self.ext_l))
+                os.system('babel -imol %s -osdf %s 2>/dev/null' % 
+                        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
+                # copy current step
+                stf = open(dir_l+'/step.out', 'w')
+                stf.write('start step 0 (init)')
+                stf.close()
+                lig_idx += 1
             elif ext_l == '.smi' or ext_l == '.txt':
                 nligs_smi = struct_tools.count_structs_sdf(file_l)
                 for idx_smi in range(nligs_smi):
+                    dir_l = workdir+'/lig%i'%lig_idx
+                    # make ligand directory
+                    os.mkdir(dir_l)
                     # Convert and copy file 
-                    os.system('babel -ismi %s -f%d -l%d -osmi %s 2>/dev/null' \
-                        %(file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
+                    os.system('babel -ismi %s -f%d -l%d -osmi %s 2>/dev/null' % 
+                            (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+'.sdf'))
+                    # copy current step
+                    stf = open(dir_l+'/step.out', 'w')
+                    stf.write('start step 0 (init)')
+                    stf.close()
+                    lig_idx += 1
+            else:
+                raise StartJobError("format of input files should be among " + ", ".join(known_formats))
 
-            # copy current step
-            stf = open(dir_l+'/step.out', 'w')
-            stf.write('start step 0 (init)')
-            stf.close()
-            lig_idx += 1
 
         # copy targets
         dir_r = workdir+'/targets'

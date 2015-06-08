@@ -22,7 +22,7 @@ def write_docking_job_array(script_name, ncpus, config_file, queue='achlys.q'):
 
 cd target$((SGE_TASK_ID-1))
 
-python ../docking.py -f ../%(config_file)s
+python ../run_docking.py -f ../%(config_file)s
 echo $? > status.txt
 """% locals()
         file.write(script)
@@ -59,7 +59,7 @@ mkdir targets
     script_name = 'run_docking.sge'
     write_docking_job_array(script_name, ntargets, 'config.ini')
     achlysdir = os.path.realpath(__file__)
-    py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/kernel/docking.py'
+    py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/docking/run_docking.py'
 
     subprocess.call("scp config.ini run_docking.sge %s pharma:%s/"%(py_docking_script,remote_dir), shell=True)
     time.sleep(5) # wait 5 sec to avoid freezing when using many scp's

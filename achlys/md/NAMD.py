@@ -2,12 +2,11 @@ import os
 import sys
 import subprocess
 import tempfile
-import uuid
 import time
 import shutil
+from achlys.tools import ssh
 
 def create_constrained_pdbfile():
-
     with open('start.pdb', 'r') as startfile:
         with open('posres.pdb', 'w') as posresfile:
             for line in startfile:
@@ -30,55 +29,46 @@ def create_constrained_pdbfile():
                     newline = line
                 print >> posresfile, newline.replace('\n','')
 
-def run(args, config, step):
-
-    config_file_name = step + '.conf'
-    dcd_file_name = step + '.dcd'
+def preprocessing_md(args, config, step, extend=False, **kwargs):
 
     config_file_func_name = 'write_' + step + '_config_file'
     config_file_func = getattr(sys.modules[__name__], config_file_func_name)
-
     config_file_func(config, **config.namd_options)
+
+def run(args, config, step):
+
+    preprocessing_md(args, config, step, **config.namd_options)
 
     if args.build:
         return
 
     if args.bgq:
-        subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 :\
- /scinet/bgq/src/namd/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2 ' + config_file_name, shell=True) 
-        ptrajdir = 'tmp/.ptraj-' + str(uuid.uuid4()).split('-')[0]
-        subprocess.check_call("ssh pharma 'mkdir %s'"%ptrajdir, shell=True)
-        subprocess.check_call("scp " + dcd_file_name + " ../common/start.prmtop pharma:" + ptrajdir, shell=True)
-        fh, tmp = tempfile.mkstemp(suffix='.sh')
-
-        with open(tmp, 'w') as file:
-            script ="""source ~/.bash_profile
-# create ptraj directory
-cd $HOME
-cd %(ptrajdir)s
-
-# write ptraj config file
-echo "trajin %(step)s.dcd 1 1 1" > ptraj.in
-echo "trajout run.pdb PDB" >> ptraj.in
-
-ptraj start.prmtop < ptraj.in > ptraj.out
-cat run.pdb.1
-
-# remove directory
-cd $HOME
-rm -rf %(ptrajdir)s"""% locals()
-            file.write(script)
- 
-        subprocess.check_call("ssh pharma 'bash -s' < " + tmp + " > run.pdb.1", shell=True)
+        namd_exe = '/home/j/jtus/preto/modules/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2'
+        subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 : ' + namd_exe + ' ' + step + '.conf', shell=True) 
     else:
-        subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + config_file_name, shell=True)
-        # use ptraj to convert .dcd file to .pdb
-        with open('ptraj.in', 'w') as prmfile:
-            print >> prmfile, 'trajin  min.dcd 1 1 1'
-            print >> prmfile, 'trajout run.pdb PDB'
-        subprocess.check_call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
+        subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + step + '.conf', shell=True)
 
-    shutil.move('run.pdb.1', 'end-%s.pdb'%step)
+    postprocessing_md(args, config, step)
+
+def postprocessing_md(args, config, step):
+
+    dcd_file_name = step + '.dcd'
+    if step != 'md':
+        if args.bgq:
+            script = """echo "parm start.prmtop
+trajin %(step).dcd 1 1 1
+trajout run.pdb pdb" > cpptraj.in
+
+cpptraj -i cpptraj.in > cpptraj.out
+cat run.pdb"""% locals()
+            files_to_copy = [dcd_file_name, '../common/start.prmtop']
+            ssh.run_script(script, 'pharma', files_to_copy=files_to_copy, output='end-%s.pdb'%step)
+        else:
+            with open('ptraj.in', 'w') as prmfile:
+                print >> prmfile, 'trajin %s 1 1 1'%dcd_file_name
+                print >> prmfile, 'trajout run.pdb PDB'
+            subprocess.check_call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
+            shutil.move('run.pdb.1', 'end-%s.pdb'%step)
 
 def write_min_config_file(config, nstepsmin=5000, temperature=310.0, amber=True, **kwargs):
 
@@ -156,7 +146,7 @@ minimize           $nsteps"""% locals()
         file.write(script)
 
 
-def write_nvt_config_file(config, nstepsnvt=5000, nrunsnvt=10, temperature=310, amber=True, **kwargs):
+def write_nvt_config_file(config, nstepsnvt=5000, nrunsnvt=10, temperature=310.0, amber=True, **kwargs):
 
     pmegridsize = config.pmegridsize
 
@@ -238,7 +228,7 @@ for { set i 0 } { $i < $nruns } { incr i 1 } {
 }"""% locals()
         file.write(script)
 
-def write_npt_config_file(config, nstepsnpt=5000, temperature=310, amber=True, **kwargs):
+def write_npt_config_file(config, nstepsnpt=5000, temperature=310.0, amber=True, **kwargs):
 
     pmegridsize = config.pmegridsize
 
@@ -321,7 +311,7 @@ LangevinPistonTemp	 $temperature
 run $nsteps"""% locals()
         file.write(script)
 
-def write_md_config_file(config, nsteps=5000, outputfreq=5000, temperature=310, amber=True, plumed=False, **kwargs):
+def write_md_config_file(config, nsteps=5000, outputfreq=5000, temperature=310.0, amber=True, extend=False, plumed=False, **kwargs):
 
     pmegridsize = config.pmegridsize
 
@@ -336,6 +326,11 @@ plumedfile plumed.dat
 """
     else:
         plumed_prms = ""
+
+    if extend:
+        inputname= 'md'
+    else:
+        inputname = 'npt/npt'
 
     if amber:
         input_files_prms = """cwd                .
@@ -361,9 +356,9 @@ set outputfreq       %(outputfreq)s
 %(input_files_prms)s
 
 # starting from Restart Files
-set inputname      npt/npt
+set inputname      %(inputname)s
 binCoordinates     $inputname.coor
-binVelocities      $inputname.vel  
+binVelocities      $inputname.vel 
 extendedSystem     $inputname.xsc
 
 # output files parameters

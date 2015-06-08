@@ -63,7 +63,7 @@ def check_import(pkgname, pkgver):
     globals()[pkgname] = mod
 
 setup(name='Achlys',
-      packages=['achlys', 'achlys.kernel', 'achlys.mdconfigs'],
+      packages=['achlys', 'achlys.kernel', 'achlys.tools', 'achlys.docking', 'achlys.md', 'achlys.mmpbsa'],
       data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/PDB/*.pdb')])],
       scripts = ['bin/start_job', 'bin/check_job'],
       license='LICENSE.txt',

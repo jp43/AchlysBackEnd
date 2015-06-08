@@ -91,7 +91,7 @@ class MDWorker(object):
 
         parser.add_argument('steps',
             type=str,
-            help='step (startup, min, equil)',
+            help='step (startup, min, equil, md)',
             nargs='+')
 
         parser.add_argument('--ncpus',
