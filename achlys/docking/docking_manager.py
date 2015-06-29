@@ -7,12 +7,12 @@ import tempfile
 import shutil
 import subprocess
 
-def write_docking_job_array(script_name, ncpus, config_file, queue='achlys.q'):
+from achlys.tools import ssh
 
-    jobname = os.path.splitext(script_name)[0]
+def write_docking_job_array(ncpus, queue='achlys.q'):
 
-    with open(script_name, 'w') as file:
-        script ="""#$ -N %(jobname)s
+    with open('run_docking.sge', 'w') as file:
+        script ="""#$ -N docking
 #$ -q %(queue)s
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
@@ -22,157 +22,145 @@ def write_docking_job_array(script_name, ncpus, config_file, queue='achlys.q'):
 
 cd target$((SGE_TASK_ID-1))
 
-python ../run_docking.py -f ../%(config_file)s
+python ../run_docking.py -f ../config.ini
 echo $? > status.txt
 """% locals()
         file.write(script)
 
-def submit_docking_job(jobid, nligs, ntargets, submit_on='pharma'):
+def submit_docking(checkjob, ligs_idxs):
 
-    # the following path is supposed to exist on the remote machine
-    remote_path = 'tmp/results'
-    workdir = 'job_' + jobid
-
-    remote_dir = remote_path + '/' + workdir
-
-    fh, tmp = tempfile.mkstemp(suffix='.sh')
-
-    with open(tmp, 'w') as file:
-        script ="""cd %(remote_path)s
-rm -rf %(workdir)s
-mkdir %(workdir)s
-cd %(workdir)s
-
-# make directory
-mkdir ligs
-mkdir targets
-"""% locals()
-        file.write(script)
+    jobid = checkjob.jobid
+    nligs = checkjob.nligs
+    ntargets = checkjob.ntargets
+     
+    path = ssh.get_remote_path(jobid, 'pharma')
 
     # create results directory on the remote machine (pharma)
-    subprocess.call("ssh pharma 'bash -s' < " + tmp, shell=True)
-    # secure copy ligand files
-    subprocess.call("scp lig*/lig*.pdb pharma:%s/ligs"%remote_dir, shell=True)
-    # secure copy receptor files
-    subprocess.call("scp targets/* pharma:%s/targets/"%remote_dir, shell=True)
+    status = subprocess.check_output("ssh pharma 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(path, path), shell=True)
+    isfirst = int(status)
 
-    script_name = 'run_docking.sge'
-    write_docking_job_array(script_name, ntargets, 'config.ini')
-    achlysdir = os.path.realpath(__file__)
-    py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/docking/run_docking.py'
+    if isfirst == 1:
+        write_docking_job_array(ntargets)
+        achlysdir = os.path.realpath(__file__)
+        py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/run_docking.py'
 
-    subprocess.call("scp config.ini run_docking.sge %s pharma:%s/"%(py_docking_script,remote_dir), shell=True)
-    time.sleep(5) # wait 5 sec to avoid freezing when using many scp's
+        # secure copy ligand files
+        subprocess.call("scp lig*/lig*.pdb targets/* config.ini \
+            run_docking.sge %s pharma:%s/."%(py_docking_script,path), shell=True)
 
-    shutil.rmtree('run_docking.sge', ignore_errors=True)
+        os.remove('run_docking.sge')
 
-    # (A) prepare docking jobs
-    fh, tmp = tempfile.mkstemp(suffix='.sh')
-    with open(tmp, 'w') as file:
+    ligs_idxs_str = ' '.join(map(str, ligs_idxs))
+
+    # Prepare docking jobs
+    with open('tmp.sh', 'w') as file:
         script ="""source ~/.bash_profile
-cd %(remote_dir)s
+cd %(path)s
 
-for lig_id in `seq 1 %(nligs)s`; do
+for lig_id in %(ligs_idxs_str)s; do
   # prepare files for docking 
-  mkdir lig$((lig_id-1))
+  mkdir lig$lig_id
 
-  cp config.ini run_docking.sge docking.py lig$((lig_id-1))/
+  cp config.ini run_docking.sge run_docking.py lig$lig_id/
   for target_id in `seq 1 %(ntargets)s`; do
-    mkdir lig$((lig_id-1))/target$((target_id-1))
-    cp ligs/lig$((lig_id-1)).pdb lig$((lig_id-1))/target$((target_id-1))/lig.pdb
-    cp targets/target$((target_id-1)).pdb lig$((lig_id-1))/target$((target_id-1))/target.pdb
+    mkdir lig$lig_id/target$((target_id-1))
+    cp lig$lig_id.pdb lig$lig_id/target$((target_id-1))/lig.pdb
+    cp target$((target_id-1)).pdb lig$lig_id/target$((target_id-1))/target.pdb
   done
 done
 
-# clean up work directory
-rm -rf ligs targets config.ini run_docking.sge docking.py
-"""% locals()
-        file.write(script)
-
-    subprocess.call("ssh pharma 'bash -s' < " + tmp, shell=True)
-
-    # (B) submit docking jobs
-    fh, tmp = tempfile.mkstemp(suffix='.sh')
-    with open(tmp, 'w') as file:
-        script ="""source ~/.bash_profile
-cd %(remote_dir)s
-
 # submit jobs
-for lig_id in `seq 1 %(nligs)s`; do
-  cd lig$((lig_id-1))
-
-  jobID=`qsub run_docking.sge` # submit job
-
-  jobID=`echo $jobID | awk 'match($0,/[0-9]+/){print substr($0, RSTART, RLENGTH)}'` # check job ID
-  echo $jobID > jobID # save jobID inside a file
-  cd ..
-done
-"""% locals()
-        file.write(script)
-
-    subprocess.call("ssh pharma 'bash -s' < " + tmp, shell=True)
-    return 'running'
-
-def write_check_docking_script(remote_dir, ligs_idxs):
-    ligs_idxs_bash = ' '.join(map(str,ligs_idxs))
-
-    fh, tmp = tempfile.mkstemp(suffix='.sh')
-    with open(tmp, 'w') as file:
-        script ="""source ~/.bash_profile
-cd %(remote_dir)s
-
-for lig_id in %(ligs_idxs_bash)s; do
+for lig_id in %(ligs_idxs_str)s; do
   cd lig$lig_id
-  for target_id in `seq 1 %(ntargets)s`; do
-    if [ -f target$((target_id-1))/status.txt ]; then
-      echo `cat target$((target_id-1))/status.txt`
-    else
-      echo -1
-    fi
-  done 
-  echo
+
+  qsub run_docking.sge # submit job
   cd ..
-done
-"""% locals()
+done"""% locals()
         file.write(script)
-    return tmp
 
-def get_docking_status(output):
-
-    output = output.split('\n')[:-1]
-
-    outputs = []
-    tmp = []
-    for item in output:
-        if item == '':
-            outputs.append(tmp)
-            tmp = []
-        else:
-            tmp.append(item)
-
-    status = []
-    for output_l in outputs:
-        output_l_int = map(int, output_l)
-        if [idx for idx, step in enumerate(output_l_int) if step > 0]:
-            status.append(1)
-        elif [idx for idx, step in enumerate(output_l_int) if step < 0]:
-            status.append(-1)
-        else:
-            status.append(0)
+    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
 
-def check_docking(jobid, ligs_idxs, ntargets, submitted_on='pharma'):
+def write_check_docking_script(path, ligs_idxs, ntargets):
 
-    # the following path is supposed to exist on the remote machine
-    remote_path = 'tmp/results'
-    workdir = 'job_' + jobid
+    ligs_idxs_str = ' '.join(map(str, ligs_idxs))
 
-    remote_dir = remote_path + '/' + workdir
+    with open('tmp.sh', 'w') as file:
+        script ="""source ~/.bash_profile
+cd %(path)s
 
-    scriptname = write_check_docking_script(remote_dir, ligs_idxs)
+for lig_id in %(ligs_idxs_str)s; do
+  # check status of each docking
+  status=0
+  cd lig$lig_id
+  for target_id in `seq 1 %(ntargets)s`; do
+    filename=target$((target_id-1))/status.txt 
+    if [ -f $filename ]; then
+      num=`cat $filename`
+      if [ $num -ne 0 ]; then
+        status=1
+      fi
+    else # the docking simulation is still running
+      status=-1
+    fi
+  done 
 
-    output = subprocess.check_output("ssh pharma 'bash -s' < " + scriptname, shell=True)
-    status = get_docking_status(output)
+  # if the docking is done, get the poses
+  # with the best scoring functions
+  if [ $status -eq 0 ]; then
+    echo "import ConfigParser
+import numpy as np
 
-    return status_ligs
+config = ConfigParser.SafeConfigParser()
+config.read('config.ini')
+
+if config.has_option('DOCKING', 'nposes'):
+    nposes  = config.getint('DOCKING', 'nposes') 
+else:
+    nposes = 7
+
+free_energy = np.zeros(%(ntargets)s)
+
+for idx in range(%(ntargets)s):
+    with open('target%%i/affinity.dat'%%idx, 'r') as fefile:
+        line = fefile.next().replace('\\n','')
+        free_energy[idx] = float(line)
+
+idxs = np.argsort(free_energy)
+idxs = idxs[:nposes]
+print ' '.join(map(str,idxs.tolist()))" > get_affinity.py
+
+    targets_idxs=`python get_affinity.py`
+
+    pose_idx=0
+    for idx in $targets_idxs; do
+      mkdir pose$pose_idx
+      mkdir pose$pose_idx/common
+      cp target$idx/complex.pdb pose$pose_idx/common/
+      cp target$idx/lig_out_h.pdb pose$pose_idx/common/lig.pdb
+      pose_idx=$((pose_idx+1))
+    done
+
+    # remove target files to free storage memory
+    #rm -rf target*
+  fi
+
+  echo $status
+  cd ..
+done"""% locals()
+        file.write(script)
+
+def check_docking(checkjob, ligs_idxs):
+
+    ntargets = checkjob.ntargets
+    jobid = checkjob.jobid
+
+    path = ssh.get_remote_path(jobid, 'pharma')
+
+    write_check_docking_script(path, ligs_idxs, ntargets)
+    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    status = ssh.get_status(output)
+
+    return status

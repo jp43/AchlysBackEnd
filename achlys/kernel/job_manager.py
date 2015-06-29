@@ -12,15 +12,23 @@ import uuid
 import glob
 import time
 import datetime
+import itertools as it
 
-from achlys import docking
+from achlys.docking import docking_manager
+from achlys.md import md_manager
+from achlys.mmpbsa import mmpbsa_manager
 from achlys.tools import prep
 from achlys.tools import struct_tools
 
 known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
 known_systems = ['herg']
 
-known_steps = ['init', 'dock', 'md', 'mmpbsa', 'analysis']
+known_steps = { 0 : ('init', ''),
+    1 : ('docking', 'docking.docking_manager'),
+    2 : ('startup', 'md.md_manager'),
+    3 : ('md', 'md.md_manager'),
+    4 : ('mmpbsa','mmpbsa.mmpbsa_manager'),
+    5 : ('analysis', '')}
 
 class StartJobError(Exception):
     pass
@@ -90,7 +98,7 @@ class StartJob(object):
                     raise StartJobError("The system specified in the configuration file should one of " + ", ".join(known_systems))
                 if system == 'herg':
                     achlysdir = os.path.realpath(__file__)
-                    dir_r = '/'.join(achlysdir.split('/')[:-5]) + '/share/hERG_data'
+                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
                     input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
                     ntargets = len(input_files_r)
                     ext_r = '.pdb'
@@ -121,18 +129,6 @@ class StartJob(object):
 
         # copy config file
         shutil.copyfile(args.config_file, workdir +'/config.ini')
-
-        ## copy ligand files
-        #for idx, file_l in enumerate(self.input_files_l):
-        #    dir_l = workdir+'/lig%i'%idx
-        #    # make ligand directory
-        #    os.mkdir(dir_l)
-        #    # copy file 
-        #    shutil.copyfile(file_l,dir_l+'/lig%i'%idx+self.ext_l)
-        #    # copy current step
-        #    stf = open(dir_l+'/step.out', 'w')
-        #    stf.write('start step 0 (init)')
-        #    stf.close()
 
         ext_l = self.get_format(self.input_files_l)
         lig_idx = 0
@@ -250,7 +246,6 @@ class CheckJobError(Exception):
 class CheckJob(object):
 
     def initialize(self, args):
-
         self.jobid = args.jobid
         self.workdir = 'job_' + self.jobid
 
@@ -283,13 +278,13 @@ class CheckJob(object):
 
         step_lig = self.steps[lig_id]
 
-        if step_lig == known_steps[-1] and status_lig == 'done':
+        if step_lig == known_steps[5] and status_lig == 'done':
             new_step_lig = step_lig
             new_status_lig = 'done' # the procedure is done
         elif status_lig == 'done':
             new_step_lig = step_lig + 1
             new_status_lig = 'start'
-        elif status_lig == 'error': # error encounter
+        elif status_lig == 'error': # error encountered
             new_step_lig = step_lig
             new_status_lig = 'error'
         elif status_lig == 'running': # job still running
@@ -297,7 +292,7 @@ class CheckJob(object):
             new_status_lig = 'running'
 
         with open('lig%i/step.out'%lig_id, 'w') as file:
-            print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[step_lig]
+            print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[new_step_lig][0]
 
         self.steps[lig_id] = new_step_lig
         self.status[lig_id] = new_status_lig
@@ -312,15 +307,35 @@ class CheckJob(object):
             help='Job ID')
         return parser
 
+    def check_step(self, step_checked, status_checked):
+
+        ligs_idxs = [idx for idx, [step, status] in enumerate(it.izip(self.steps, self.status)) if step == step_checked and status == status_checked]
+
+        if ligs_idxs:
+            # get module name
+            step_name = known_steps[step_checked][0]
+            module_name = known_steps[step_checked][1]
+
+            # get function suffix
+            if status == 'start':
+                func_suffix = 'submit_'
+            elif status == 'running':
+                func_suffix = 'check_'
+            else:
+                raise ValueError('status should be either start or running when trying to run a step')
+
+            func_name = func_suffix + step_name
+            func = getattr(sys.modules['achlys.'+module_name], func_name)
+
+            status = func(self, ligs_idxs)
+            for idx, lig_id in enumerate(ligs_idxs):
+                self.update_step(lig_id, status[idx])
+
     def run(self):
     
         parser = self.create_arg_parser()
         args = parser.parse_args()
         self.initialize(args)
-
-        #logfile = open(self.basejobdir+'checkjoblog', 'a')
-        #logfile.write('Running checkjob for %s at %s\n' % (self.jobid, datetime.datetime.now()))
-        #logfile.close()
 
         os.chdir(self.workdir)
 
@@ -334,30 +349,9 @@ class CheckJob(object):
                     status_lig = prep.check_prep_job(self.jobid, lig_id, submit_on='local')
                     self.update_step(lig_id, status_lig)
         
-        # If all ligands are done with step 0, then submit docking job and advance to step 1
-        if all([self.status[lig_id] == 'start' and self.steps[lig_id] == 1 for lig_id in range(self.nligs)]):
-            status = docking.submit_docking_job(self.jobid, self.nligs, self.ntargets, submit_on='pharma')
-            for lig_id in range(self.nligs):
-                self.update_step(lig_id, status)
-        
-        ## check ligands in step STEP_DOCK
-        #ligs_idxs = [idx for idx, step in enumerate(self.current_step) if step == STEP_PREP]
-        #if ligs_idxs:
-        #    docking.check_docking(self.jobid, ligs_idxs, self.ntargets, submitted_on='pharma')
-            
-        #for lig_id, step in enumerate(self.current_step):
-        #    if step == STEP_DOCK: # docking is running
+        for step in range(1,5): 
+            for status in ['start', 'running']:
+                self.check_step(step, status)
 
-        #    elif step == STEP_MD: # MD is running
-        #        raise NotImplemented("step STEP_MD not implemented")
-        #        # check MD current status
-
-        #    elif step == STEP_MMPBSA: # MMPBSA is running
-        #        raise NotImplemented("step STEP_MMPBSA not implemented")
-
-        #    elif step == STEP_ANALYSIS:
-        #        raise NotImplemented("step STEP_ANALYSIS not implemented")
-
-        
         os.chdir('..')
 

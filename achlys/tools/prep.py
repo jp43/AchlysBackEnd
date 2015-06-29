@@ -3,7 +3,7 @@ import os
 import shutil
 import subprocess
 
-from achlys import struct_tools
+from achlys.tools import struct_tools
 
 # Convert SDF to 3D PDB file
 def convert_sdf_to_pdb(inpath, outpath):

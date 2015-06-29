@@ -47,6 +47,7 @@ def prepare_tleap_input_file(netcharge=0):
         nnas = int(70)
         ncls = int(70 + netcharge)
 
+        # addions p Na+ %(nnas)s Cl- %(ncls)s
         # write tleap input file
         with open('leap.in', 'w') as file:
             script ="""source leaprc.ff99SB
@@ -56,7 +57,6 @@ loadamberparams lig.frcmod
 p = loadPdb complex.pdb
 charge p
 solvatebox p TIP3PBOX 10
-addions p Na+ %(nnas)s Cl- %(ncls)s
 charge p
 saveAmberParm p start.prmtop start.inpcrd
 savepdb p start.pdb

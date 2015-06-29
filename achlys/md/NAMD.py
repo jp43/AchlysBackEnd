@@ -1,10 +1,10 @@
 import os
 import sys
+import ssh
 import subprocess
 import tempfile
 import time
 import shutil
-from achlys.tools import ssh
 
 def create_constrained_pdbfile():
     with open('start.pdb', 'r') as startfile:
@@ -56,7 +56,7 @@ def postprocessing_md(args, config, step):
     if step != 'md':
         if args.bgq:
             script = """echo "parm start.prmtop
-trajin %(step).dcd 1 1 1
+trajin %(step)s.dcd 1 1 1
 trajout run.pdb pdb" > cpptraj.in
 
 cpptraj -i cpptraj.in > cpptraj.out
@@ -93,8 +93,8 @@ paraTypeXplor      off"""
 
     else:
         input_files_prms = """cwd                .
-structure           ../common/start.psf
-coordinates         ../common/start.pdb"""
+coordinates         ../common/start.pdb
+structure           ../common/start.psf"""
 
 
     with open('min.conf', 'w') as file:
@@ -129,6 +129,8 @@ margin              2.5
 # Integrator Parameters
 timestep            2.0
 rigidBonds          all
+fullElectFrequency  2
+stepspercycle       10
 
 # PME (for full-system periodic electrostatics)
 PME                 yes
@@ -144,7 +146,6 @@ cellBasisVector3       0          0        %(boxz)5.3f
 # Minimization
 minimize           $nsteps"""% locals()
         file.write(script)
-
 
 def write_nvt_config_file(config, nstepsnvt=5000, nrunsnvt=10, temperature=310.0, amber=True, **kwargs):
 
@@ -163,8 +164,8 @@ paraTypeXplor      off"""
 
     else:
         input_files_prms = """cwd                .
-structure           ../common/start.psf
-coordinates         ../min/end-min.pdb"""
+coordinates         ../min/end-min.pdb
+structure           ../common/start.psf"""
 
     with open('nvt.conf', 'w') as file:
         script ="""# NVT equilibration
@@ -197,12 +198,13 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
-stepspercycle       10
 margin              5
 
 # Integrator Parameters
 timestep            2.0
 rigidBonds          all
+fullElectFrequency  2
+stepspercycle       10
 
 # PME (for full-system periodic electrostatics)
 PME                 yes
@@ -245,8 +247,9 @@ paraTypeXplor      off"""
 
     else:
         input_files_prms = """cwd                .
-structure           ../common/start.psf
-coordinates         ../nvt/end-nvt.pdb"""
+coordinates         ../nvt/end-nvt.pdb
+structure           ../common/start.psf"""
+
 
     with open('npt.conf', 'w') as file:
         script ="""# NPT equilibration
@@ -277,12 +280,13 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
-stepspercycle       10
 margin              5
 
 # Integrator Parameters
 timestep            2.0
 rigidBonds          all
+fullElectFrequency  2
+stepspercycle       10
 
 # PME (for full-system periodic electrostatics)
 PME                 yes
@@ -311,7 +315,7 @@ LangevinPistonTemp	 $temperature
 run $nsteps"""% locals()
         file.write(script)
 
-def write_md_config_file(config, nsteps=5000, outputfreq=5000, temperature=310.0, amber=True, extend=False, plumed=False, **kwargs):
+def write_md_config_file(config, nsteps=5000, outputfreq=5000, temperature=310.0, timestep=2.0, amber=True, extend=False, plumed=False, **kwargs):
 
     pmegridsize = config.pmegridsize
 
@@ -341,8 +345,9 @@ paraTypeXplor      off"""
 
     else:
         input_files_prms = """cwd                .
-structure           common/start.psf
-coordinates         npt/end-npt.pdb"""
+coordinates         npt/end-npt.pdb
+structure           common/start.psf"""
+
 
     with open('md.conf', 'w') as file:
         script ="""# Production run
@@ -374,10 +379,13 @@ switching           on
 switchdist          10
 cutoff              12
 outputPairlists     100
+margin              5
 
 # Integrator Parameters
-timestep            2.0
+timestep            %(timestep)s
 rigidBonds          all
+fullElectFrequency  2
+stepspercycle       10
 
 # PME (for full-system periodic electrostatics)
 PME                 yes
