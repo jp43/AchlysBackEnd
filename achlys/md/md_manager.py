@@ -26,7 +26,7 @@ for lig_id in %(ligs_idxs_str)s; do
   cd lig$lig_id/
   for posdir in pose*; do 
     cd $posdir/
-    python run_md.py startup -f config.ini
+    python run_md.py startup --withlig -f config.ini
     echo $? > status.txt
     cd ..
   done
@@ -141,7 +141,7 @@ def write_md_job_script(ligs_idxs):
 # @ bg_connectivity    = Torus
 # @ queue 
 
-python run_md.py min equil md -f config.ini --ncpus 1024 --bgq
+python run_md.py min equil md -f config.ini --ncpus 1024 --bgq --withlig
 echo $? > status.txt"""% locals()
         file.write(script)
 
