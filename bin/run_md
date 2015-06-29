@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+
+from achlys.md import run_md as md
+
+if __name__=='__main__':
+    md.MDWorker().run()

@@ -24,8 +24,6 @@ class MDConfig(object):
         config = ConfigParser.SafeConfigParser()
         config.read(args.config_file)
 
-        self.system = config.get('GENERAL', 'system').lower()
-
         if config.has_option('MD', 'program'):
             program = config.get('MD', 'program').lower()
             if program not in known_programs:

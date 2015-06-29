@@ -65,7 +65,7 @@ def check_import(pkgname, pkgver):
 setup(name='Achlys',
       packages=['achlys', 'achlys.kernel', 'achlys.tools', 'achlys.docking', 'achlys.md', 'achlys.mmpbsa'],
       data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/PDB/*.pdb')])],
-      scripts = ['bin/start_job', 'bin/check_job'],
+      scripts = ['bin/start_job', 'bin/check_job', 'bin/run_md'],
       license='LICENSE.txt',
       description='AchlysBackEnd package',
       long_description=open('README.md').read(),
