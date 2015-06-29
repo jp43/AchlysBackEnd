@@ -5,11 +5,12 @@ import NAMD
 
 def run_startup(config, namd=False):
 
-    # call antechamber
-    subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
-    # create starting structure
-    subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
-    prepare_tleap_input_file()
+    if config.withlig:
+        # call antechamber
+        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
+        # create starting structure
+        subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
+    prepare_tleap_input_file(config)
     subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
     # check box dimensions
@@ -22,7 +23,7 @@ def run_startup(config, namd=False):
                 newline = line.replace('\n','').split()
                 netcharge = float(newline[-1])
 
-    prepare_tleap_input_file(netcharge=netcharge)
+    prepare_tleap_input_file(config, netcharge=netcharge)
     subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
     if namd:
@@ -42,18 +43,23 @@ def update_box_dimensions(config):
     config.box = [size + 2.0 for size in box]
     config.pmegridsize = [int(size/frac_pmegridsize) if int(size/frac_pmegridsize)%2 == 0 else int(size/frac_pmegridsize) + 1 for size in config.box]
 
-def prepare_tleap_input_file(netcharge=0):
+def prepare_tleap_input_file(config, netcharge=0):
 
-        nnas = int(70)
-        ncls = int(70 + netcharge)
-
-        # addions p Na+ %(nnas)s Cl- %(ncls)s
         # write tleap input file
+        if config.withlig:
+            lines_lig="""LIG = loadmol2 lig.mol2
+loadamberparams lig.frcmod"""
+        else:
+            lines_lig=""
+
+        #nnas = int(70)
+        #ncls = int(70 + netcharge)
+        #addions p Na+ %(nnas)s Cl- %(ncls)s
+
         with open('leap.in', 'w') as file:
             script ="""source leaprc.ff99SB
 source leaprc.gaff
-LIG = loadmol2 lig.mol2
-loadamberparams lig.frcmod
+%(lines_lig)s
 p = loadPdb complex.pdb
 charge p
 solvatebox p TIP3PBOX 10

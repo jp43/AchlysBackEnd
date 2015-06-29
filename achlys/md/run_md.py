@@ -54,22 +54,25 @@ class MDConfig(object):
             else:
                 steps[step] = False
 
+        self.withlig = args.withlig
         self.steps = steps
         self.check_starting_files(args)
 
     def check_starting_files(self, args):
 
         steps = self.steps
+        withlig = self.withlig
 
         if steps['startup'] or steps['min'] or steps['equil']:
             if not os.path.isdir('common'):
                 raise MDConfigError('folder "common" not found!')
 
         if steps['startup']:
-            if not os.path.exists('common/lig.pdb'):
-                raise MDConfigError('file "common/lig.pdb" not found!')
+            if withlig:
+                if not os.path.exists('common/lig.pdb'):
+                    raise MDConfigError('file "common/lig.pdb" not found!')
 
-            elif not os.path.exists('common/complex.pdb'):
+            if not os.path.exists('common/complex.pdb'):
                 raise MDConfigError('file "common/complex.pdb" not found!')
 
         if not steps['startup'] and (steps['min'] or steps['equil']):
@@ -102,6 +105,12 @@ class MDWorker(object):
         parser.add_argument('-f',
             dest='config_file',
             help='config file containing some extra parameters')
+
+        parser.add_argument('--withlig',
+            dest='withlig',
+            action='store_true',
+            default=False,
+            help='run MD on a protein ligand complex')
 
         parser.add_argument('--build',
             dest='build',
