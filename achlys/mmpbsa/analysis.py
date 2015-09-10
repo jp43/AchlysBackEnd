@@ -5,13 +5,8 @@ import os
 import argparse
 import ConfigParser
 import numpy as np
-import logging
 import time
 import glob
-
-from achlys.kernel import docking
-from achlys.kernel import md
-from achlys.kernel import mmpbsa
 
 class AnalysisConfigError(Exception):
     pass
@@ -25,26 +20,17 @@ class AnalysisConfig(object):
 
         self.distmax = config.getfloat('ANALYSIS', 'distmax')
         self.femax = config.getfloat('ANALYSIS', 'femax')
-        self.docking = docking.DockingConfig(config_file)
-        self.md = md.MDAchlysConfig(config_file)
-        self.mmpbsa = mmpbsa.MMPBSAAchlysConfig(config_file)
 
 class AnalysisWorker(object):
 
     def get_minimal_distance(self, config):
 
-        if config.md.program == 'namd':
-            filename = 'equ/end-equ.pdb'
-        else:
-            raise NotImplemented("analysis of results for MD software different than namd is not supported")
-
-        if config.md.system == 'herg':
-            # names and RSN of THR's residues
-            resIDs = [('THR', 210), ('THR', 465), ('THR', 720), ('THR', 975)]
+        # names and RSN of THR's residues
+        resIDs = [('THR', 210), ('THR', 465), ('THR', 720), ('THR', 975)]
 
         coords = []
         # get coordinates of specific residues
-        with open(filename, 'r') as pdbfile:
+        with open('end-md.pdb', 'r') as pdbfile:
             for line in pdbfile:
                 if line.startswith(('ATOM', 'HETATM')):
                     name = line[17:20].strip()
@@ -57,7 +43,7 @@ class AnalysisWorker(object):
 
         # get coordinates of the ligand
         coordslig = []
-        with open(filename, 'r') as pdbfile:
+        with open('end-md.pdb', 'r') as pdbfile:
             for line in pdbfile:
                 if line.startswith(('ATOM', 'HETATM')):
                     name = line[17:20].strip()
@@ -92,14 +78,6 @@ class AnalysisWorker(object):
             help='config file containing some extra parameters')
 
         args = parser.parse_args()
-        logging.basicConfig(filename='achlys.log',
-                            filemode='a',
-                            format="%(levelname)s:%(name)s:%(asctime)s: %(message)s",
-                            datefmt="%H:%M:%S",
-                            level=logging.DEBUG)
-
-        tcpu1 = time.time()
-        logging.info('Starting analysis...')
 
         config = AnalysisConfig(args.config_file)
         curdir = os.getcwd()
@@ -107,17 +85,18 @@ class AnalysisWorker(object):
         distance = []
         binding_free_energy = []
 
-        for workdir in glob.glob('md-pose*'):
-            os.chdir(workdir)
-            distance.append(self.get_minimal_distance(config))
-            binding_free_energy.append(self.get_binding_free_energy(config))
-            os.chdir(curdir)
+        for workdir in glob.glob('pose*'):
+            if os.path.isdir(workdir):
+                os.chdir(workdir)
+                distance.append(self.get_minimal_distance(config))
+                binding_free_energy.append(self.get_binding_free_energy(config))
+                os.chdir(curdir)
 
         binding_free_energy_idx = np.argmin(np.array(binding_free_energy))
         dist = distance[binding_free_energy_idx]
         binding_free_energy = binding_free_energy[binding_free_energy_idx]
 
-        with open('status.txt', 'w') as statfile:
+        with open('lig.info', 'w') as statfile:
             if dist < config.distmax and binding_free_energy < config.femax:
                 print >> statfile, 'status: BLOCKER' 
             else:
@@ -125,5 +104,5 @@ class AnalysisWorker(object):
             print >> statfile, 'distance: %8.3f' %dist
             print >> statfile, 'binding free energy: %8.3f' %binding_free_energy
 
-        tcpu2 = time.time()
-        logging.info('Analysis done. Total time needed: %i s.' %(tcpu2-tcpu1))
+if __name__ == '__main__':
+    AnalysisWorker().run()

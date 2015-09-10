@@ -9,16 +9,17 @@ import subprocess
 
 from achlys.tools import ssh
 
-def write_docking_job_array(ncpus, queue='achlys.q'):
+def write_docking_job_array(ncpus, queue='achlys.q,serial.q'):
 
     with open('run_docking.sge', 'w') as file:
         script ="""#$ -N docking
 #$ -q %(queue)s
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
-#$ -V
 #$ -cwd
 #$ -S /bin/bash
+
+source ~/.bash_profile
 
 cd target$((SGE_TASK_ID-1))
 
@@ -140,11 +141,13 @@ print ' '.join(map(str,idxs.tolist()))" > get_affinity.py
       mkdir pose$pose_idx/common
       cp target$idx/complex.pdb pose$pose_idx/common/
       cp target$idx/lig_out_h.pdb pose$pose_idx/common/lig.pdb
+      cp target$idx/affinity.dat pose$pose_idx/
+      cp target$idx/*.out pose$pose_idx/
       pose_idx=$((pose_idx+1))
     done
 
     # remove target files to free storage memory
-    #rm -rf target*
+    rm -rf target*
   fi
 
   echo $status

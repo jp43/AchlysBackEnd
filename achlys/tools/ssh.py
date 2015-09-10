@@ -39,10 +39,13 @@ rm -rf %(tmpdir)s"""% locals()
 def get_remote_path(jobid, machine):
     """ get path on the remote machine"""
 
-    # the following path is supposed to exist
-    prefix = 'tmp/results'
-    suffix = 'job_' + jobid
+    if machine == 'bgq':
+        prefix = 'scratch/results'
+    elif machine == 'pharma':
+        # the following path is supposed to exist
+        prefix = 'tmp/results'
 
+    suffix = 'job_' + jobid
     path = prefix + '/' + suffix
     return path
 
@@ -56,5 +59,16 @@ def get_status(output):
             status.append('running')
         else:
             status.append('error')
+
+    return status
+
+def get_status_transfer(output):
+
+    status = []
+    for num in map(int,output.split('\n')[:-1]):
+        if num == 0:
+            status.append('done')
+        elif num == -1:
+            status.append('waiting')
 
     return status

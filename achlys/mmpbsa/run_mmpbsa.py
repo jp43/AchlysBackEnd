@@ -51,7 +51,7 @@ startframe=1, endframe=5000, interval=1,
 verbose=2, keep_files=0,
 /
 &gb
-igb=5, saltcon=0.150,
+igb=2, saltcon=0.150,
 /"""% locals()
             file.write(script)
 
@@ -96,22 +96,23 @@ igb=5, saltcon=0.150,
                     print >> ligpdb, line.replace('\n','')
 
         # call antechamber
-        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
+        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -du y -pf y > antchmb.log', shell=True)
+        #subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -j 4 -s 2 -at gaff -c bcc -du y -s 2 -pf y -nc 1', shell=True)
         # create starting structure
         subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
         self.prepare_tleap_input_file(config)
         subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
         # use ptraj to convert .dcd file to .mdcrd
-        with open('ptraj.in', 'w') as prmfile:
-            print >> prmfile, 'trajin  md.dcd 0 250 1'
-            print >> prmfile, 'image origin center familiar com :1-1021'
-            print >> prmfile, 'trajout run.mdcrd trajectory'
+        #with open('ptraj.in', 'w') as prmfile:
+        #    print >> prmfile, 'trajin  md.dcd 0 250 1'
+        #    print >> prmfile, 'image origin center familiar com :1-1021'
+        #    print >> prmfile, 'trajout run.mdcrd trajectory'
 
-        subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
+        #subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
 
         self.prepare_mmpbsa_input_file(config)
-        subprocess.call('mpirun -np 16 MMPBSA.py.MPI -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y run.mdcrd', shell=True)
+        subprocess.call('MMPBSA.py -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y md.dcd', shell=True)
 
     def run(self):
 
@@ -120,3 +121,6 @@ igb=5, saltcon=0.150,
 
         config = MMPBSAAchlysConfig(args.config_file)
         self.do_mmpbsa(config)
+
+if __name__ == '__main__':
+    MMPBSAAchlysWorker().run()

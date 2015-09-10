@@ -2,6 +2,7 @@ from __future__ import with_statement
 
 import sys
 import os
+import socket
 import subprocess
 import tempfile
 import shutil
@@ -160,6 +161,10 @@ prepare_receptor4.py -r target.pdb -o target.pdbqt
 vina --config vina.config &>> vina.out"""% locals()
                 file.write(script) 
 
+        print "-----------"
+        print "HOSTNAME: ", socket.gethostname()
+        print "-----------"
+         
         os.chmod(script_name, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR)
 
     def run_docking(self, config):

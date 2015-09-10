@@ -21,7 +21,7 @@ from achlys.tools import prep
 from achlys.tools import struct_tools
 
 known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
-known_systems = ['herg']
+known_systems = ['herg', 'herg-inactivated']
 
 known_steps = { 0 : ('init', ''),
     1 : ('docking', 'docking.docking_manager'),
@@ -95,10 +95,16 @@ class StartJob(object):
             if config.has_option('GENERAL', 'system'):
                 system = config.get('GENERAL', 'system').lower()
                 if system not in known_systems:
-                    raise StartJobError("The system specified in the configuration file should one of " + ", ".join(known_systems))
+                    raise StartJobError("The system specified in the configuration file should be one of " + ", ".join(known_systems))
                 if system == 'herg':
                     achlysdir = os.path.realpath(__file__)
                     dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
+                    input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+                    ntargets = len(input_files_r)
+                    ext_r = '.pdb'
+                elif system == 'herg-inactivated':
+                    achlysdir = os.path.realpath(__file__)
+                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_inactiv'
                     input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
                     ntargets = len(input_files_r)
                     ext_r = '.pdb'
@@ -138,9 +144,10 @@ class StartJob(object):
                 # make ligand directory
                 os.mkdir(dir_l)
                 # Convert and copy file
-                os.system('babel -ipdb %s -osdf %s 2>/dev/null' % 
-                        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
+                # os.system('babel -ipdb %s -osdf %s 2>/dev/null' % 
+                #        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
                 # copy current step
+                shutil.copyfile(file_l,dir_l+'/lig%i.pdb'%lig_idx)
                 stf = open(dir_l+'/step.out', 'w')
                 stf.write('start step 0 (init)')
                 stf.close()
@@ -294,8 +301,8 @@ class CheckJob(object):
         with open('lig%i/step.out'%lig_id, 'w') as file:
             print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[new_step_lig][0]
 
-        self.steps[lig_id] = new_step_lig
-        self.status[lig_id] = new_status_lig
+        #self.steps[lig_id] = new_step_lig
+        #self.status[lig_id] = new_status_lig
 
     def create_arg_parser(self):
         parser = argparse.ArgumentParser(description="Run CheckJob...")
@@ -317,9 +324,9 @@ class CheckJob(object):
             module_name = known_steps[step_checked][1]
 
             # get function suffix
-            if status == 'start':
+            if status_checked == 'start':
                 func_suffix = 'submit_'
-            elif status == 'running':
+            elif status_checked == 'running':
                 func_suffix = 'check_'
             else:
                 raise ValueError('status should be either start or running when trying to run a step')
