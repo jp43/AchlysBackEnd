@@ -58,14 +58,7 @@ def postprocessing_md(args, config, step):
     dcd_file_name = step + '.dcd'
     if step != 'md':
         if args.bgq:
-            script = """echo "parm start.prmtop
-trajin %(step)s.dcd 1 1 1
-trajout run.pdb pdb" > cpptraj.in
-
-cpptraj -i cpptraj.in > cpptraj.out
-cat run.pdb"""% locals()
-            files_to_copy = [dcd_file_name, '../common/start.prmtop']
-            ssh.run_script(script, 'pharma', files_to_copy=files_to_copy, output='end-%s.pdb'%step)
+            subprocess.check_call('catdcd -o end-%s.pdb -s ../common/start.pdb -otype pdb %s.dcd'%(step,step), shell=True)
         else:
             with open('ptraj.in', 'w') as prmfile:
                 print >> prmfile, 'trajin %s 1 1 1'%dcd_file_name

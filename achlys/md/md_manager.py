@@ -9,7 +9,7 @@ import subprocess
 
 from achlys.tools import ssh
 
-def write_startup_job_script(queue='serial.q,parallel.q'):
+def write_startup_job_script(queue='achlys.q,serial.q,parallel.q'):
 
     with open('run_startup.sge', 'w') as file:
         script ="""#$ -N md_startup
@@ -28,8 +28,8 @@ for posdir in pose*; do
 done
 
 # tar poses
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
-tar -zcf poses${lig_id}.tar.gz pose* --exclude='status.txt'
+#lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+#tar -zcf poses${lig_id}.tar.gz pose* --exclude='status.txt'
 """% locals()
         file.write(script)
 
@@ -127,8 +127,8 @@ def write_md_job_script():
 # @ queue 
 
 cd $PWD
-tar -xf poses*.tar.gz
-rm -rf poses*.tar.gz
+#tar -xf poses*.tar.gz
+#rm -rf poses*.tar.gz
 for posdir in pose*; do 
   cd $posdir
   python run_md.py min equil md -f config.ini --ncpus 1024 --bgq --withlig
@@ -177,7 +177,7 @@ def submit_md(checkjob, ligs_idxs):
         write_md_job_script()
         subprocess.call("scp run_md.sh bgq:%s/."%path, shell=True)
 
-    subprocess.call("ssh -C pharma 'cd %s; tar -cf - lig%s/poses*' | ssh -C bgq 'cd %s/. && tar -xf -'"%(path_pharma, ligs_idxs_bash, path), shell=True)
+    subprocess.check_call("ssh -C pharma 'cd %s; tar -cf - lig%s/pose* --exclude=""status.txt""' | ssh -C bgq 'cd %s/. && tar -xf -'"%(path_pharma, ligs_idxs_bash, path), shell=True)
 
     # submit startup scripts
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))

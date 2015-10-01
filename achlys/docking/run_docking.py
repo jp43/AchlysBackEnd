@@ -133,11 +133,11 @@ prepare_receptor4.py -r target.pdb -o target.pdbqt
 
 # run autogrid
 prepare_gpf4.py -l lig.pdbqt -r target.pdbqt -o grid.gpf %(autogrid_options_flag)s
-autogrid4 -p grid.gpf -l grid.glg
+autogrid4 -p grid.gpf -l grid.glg &>> autodock.out
 
 # run autodock
 prepare_dpf4.py -l lig.pdbqt -r target.pbdqt -o dock.dpf -p move=lig.pdbqt %(autodock_options_flag)s
-autodock4 -p dock.dpf -l dock.dlg"""% locals()
+autodock4 -p dock.dpf -l dock.dlg &>> autodock.out"""% locals()
                 file.write(script)
 
         elif config.program == 'vina':

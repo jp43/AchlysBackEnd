@@ -9,7 +9,7 @@ import subprocess
 
 from achlys.tools import ssh
 
-def write_docking_job_array(ncpus, queue='achlys.q,serial.q'):
+def write_docking_job_array(ncpus, queue='achlys.q,serial.q,parallel.q'):
 
     with open('run_docking.sge', 'w') as file:
         script ="""#$ -N docking
@@ -73,7 +73,6 @@ done
 # submit jobs
 for lig_id in %(ligs_idxs_str)s; do
   cd lig$lig_id
-
   qsub run_docking.sge # submit job
   cd ..
 done"""% locals()

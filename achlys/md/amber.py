@@ -1,5 +1,5 @@
 import sys
-
+import os
 import fileinput
 import subprocess
 import NAMD
@@ -11,34 +11,73 @@ def update_pdbfile(filename):
         newline = newline.replace('Br','BR')
         print newline
 
+def correct_prmtop_file(filename):
+    isperiodicity = False
+    for line in fileinput.input(filename, inplace=True):
+        if line.startswith("%FLAG DIHEDRAL_PERIODICITY"):
+            isperiodicity = True        
+        elif line.startswith("%FLAG"):
+            isperiodicity = False
+        newline = line.replace('\n','')
+        if isperiodicity:
+            newline = newline.replace('0.','1.')
+        print newline
+
+def run_antechamber(pdbfile, mol2file):
+    """ use H++ idea of running antechamber multiple times with bcc's 
+charge method to estimate the appropriate net charge!!"""
+
+    logfile = 'antchmb.log'
+    max_net_charge = 30
+    net_charge = [0]
+    for nc in range(max_net_charge):
+        net_charge.extend([nc+1,-(nc+1)])
+
+    for nc in net_charge:
+        iserror = False
+        subprocess.call('antechamber -i %s -fi pdb -o %s -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > %s'%(pdbfile, mol2file, nc, logfile), shell=True)
+        with open(logfile, 'r') as lf:
+            for line in lf:
+                if 'Error' in line:
+                    iserror = True
+        if not iserror:
+            lignc = nc
+            break
+
+    if not iserror:
+        with open('lignc.dat', 'w') as ncf:
+            print >> ncf, lignc 
+    else:
+        raise ValueError("No appropriate net charge was found to run antechamber's bcc charge method")
+
+    return lignc
+
+def run_parmchk(mol2file, frcmodfile):
+    """ run parmchk to generate frcmod file""" 
+    subprocess.check_call('parmchk -i %s -f mol2 -o %s'%(mol2file, frcmodfile), shell=True)
+
 def run_startup(config, namd=False):
 
     if config.withlig:
         # modify lig.pdb to meet amber convention
         update_pdbfile('lig.pdb')
         update_pdbfile('complex.pdb')
-        # call antechamber
-        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -du y -pf y > antchmb.log', shell=True)
-        #subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c gas -du y -pf y > antchmb.log', shell=True)
-        # create starting structure
-        subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
-    prepare_tleap_input_file(config)
-    subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
+
+        # call antechamber & parmchk
+        lignc = run_antechamber('lig.pdb','lig.mol2')
+        run_parmchk('lig.mol2', 'lig.frcmod')
+    else:
+        lignc = 0
+
+    netcharge = config.netcharge + lignc 
+    run_tleap(config, 'leap.in', netcharge=netcharge)
 
     # check box dimensions
     update_box_dimensions(config)
 
-    # use leap.log to find the dimensions of the box
-    with open('leap.log', 'r') as logfile:
-        for line in logfile:
-            if line.startswith('Total unperturbed charge'):
-                newline = line.replace('\n','').split()
-                netcharge = float(newline[-1])
-
-    prepare_tleap_input_file(config, netcharge=netcharge)
-    subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
-
+    # once the .pdb and .prmtop files are created, check p
     if namd:
+        correct_prmtop_file('start.prmtop')
         NAMD.create_constrained_pdbfile()
 
 def update_box_dimensions(config):
@@ -51,45 +90,38 @@ def update_box_dimensions(config):
                 box = map(float,line_s.split()[-3:])
 
     frac_pmegridsize = 0.9
-
     config.box = [size + 2.0 for size in box]
     config.pmegridsize = [int(size/frac_pmegridsize) if int(size/frac_pmegridsize)%2 == 0 else int(size/frac_pmegridsize) + 1 for size in config.box]
 
+
+def run_tleap(config, leapin, netcharge=0):
+    """run tleap"""
+
+    prepare_tleap_input_file(config, netcharge=netcharge)
+    subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True)
+
 def prepare_tleap_input_file(config, netcharge=0):
 
-        # write tleap input file
         if config.withlig:
             lines_lig="""LIG = loadmol2 lig.mol2
 loadamberparams lig.frcmod"""
         else:
             lines_lig=""
 
-        #nnas = int(70)
-        #ncls = int(70 + netcharge)
-        #addions p Na+ %(nnas)s Cl- %(ncls)s
-
-        #source leaprc.ff99SB
-        ##source leaprc.lipid11
-        #source leaprc.gaff
-        #loadamberprep hit.prepin
-        #loadamberparams hit.frcmod
-        #p = loadPdb target-ligand.pdb
-        #charge p
-        #bond p.995.SG p.397.SG
-        #bond p.907.SG p.230.SG
-        #bond p.142.SG p.740.SG
-        #bond p.652.SG p.485.SG
-        #bond p.291.SG p.287.SG
-        #bond p.797.SG p.801.SG
-        #bond p.32.SG p.36.SG
-        #bond p.542.SG p.546.SG
-        #solvatebox p TIP3PBOX 10
-        #addions p Na+ 148 Cl- 136
-        #charge p
-        #saveAmberParm p start.prmtop start.inpcrd
-        #savepdb p start.pdb
-        #quit
-
+        nnas = 148
+        ncls = 148
+        if netcharge < 0:
+            ncls -= abs(netcharge)
+        elif netcharge > 0:
+            nnas -= netcharge
+#bond p.995.SG p.397.SG
+#bond p.907.SG p.230.SG
+#bond p.142.SG p.740.SG
+#bond p.652.SG p.485.SG
+#bond p.291.SG p.287.SG
+#bond p.797.SG p.801.SG
+#bond p.32.SG p.36.SG
+#bond p.542.SG p.546.SG
 
         with open('leap.in', 'w') as file:
             script ="""source leaprc.ff99SB
@@ -98,6 +130,7 @@ source leaprc.gaff
 p = loadPdb complex.pdb
 charge p
 solvatebox p TIP3PBOX 10
+addions p Na+ %(nnas)s Cl- %(ncls)s
 charge p
 saveAmberParm p start.prmtop start.inpcrd
 savepdb p start.pdb

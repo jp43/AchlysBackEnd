@@ -64,7 +64,7 @@ def check_import(pkgname, pkgver):
 
 setup(name='Achlys',
       packages=['achlys', 'achlys.kernel', 'achlys.tools', 'achlys.docking', 'achlys.md', 'achlys.mmpbsa'],
-      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/PDB/*.pdb')]), ('share/hERG_data_inactiv',[pdbfile for pdbfile in glob.glob('data/HERG_INACTIV/*.pdb')])],
+      data_files=[('share/hERG_data/', [pdbfile for pdbfile in glob.glob('data/KB_HERG/*.pdb')]), ('share/hERG_data_inactiv',[pdbfile for pdbfile in glob.glob('data/HERG_INACTIV/*.pdb')]),('share/hERG_data_cut/', [pdbfile for pdbfile in glob.glob('data/KB_HERG_CUT/*.pdb')])],
       scripts = ['bin/start_job', 'bin/check_job', 'bin/run_md'],
       license='LICENSE.txt',
       description='AchlysBackEnd package',

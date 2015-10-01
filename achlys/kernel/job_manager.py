@@ -21,7 +21,7 @@ from achlys.tools import prep
 from achlys.tools import struct_tools
 
 known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
-known_systems = ['herg', 'herg-inactivated']
+known_systems = ['herg', 'herg-cut', 'herg-inactivated']
 
 known_steps = { 0 : ('init', ''),
     1 : ('docking', 'docking.docking_manager'),
@@ -99,6 +99,12 @@ class StartJob(object):
                 if system == 'herg':
                     achlysdir = os.path.realpath(__file__)
                     dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
+                    input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+                    ntargets = len(input_files_r)
+                    ext_r = '.pdb'
+                elif system == 'herg-cut':
+                    achlysdir = os.path.realpath(__file__)
+                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_cut'
                     input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
                     ntargets = len(input_files_r)
                     ext_r = '.pdb'
