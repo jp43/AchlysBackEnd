@@ -13,17 +13,18 @@ import numpy as np
 
 known_programs = ['namd']
 
-class MMPBSAAchlysConfigError(Exception):
+class MMPBSAConfigError(Exception):
     pass
 
-class MMPBSAAchlysConfig(object):
+class MMPBSAConfig(object):
 
     def __init__(self, config_file):
 
         config = ConfigParser.SafeConfigParser()
         config.read(config_file)
+        self.config = config
 
-class MMPBSAAchlysWorker(object):
+class MMPBSAWorker(object):
 
     def prepare_tleap_input_file(self, config, options=None):
 
@@ -57,17 +58,27 @@ igb=2, saltcon=0.150,
 
     def create_arg_parser(self):
 
-        parser = argparse.ArgumentParser(description='Run Achlys MMPBSA simulation..')
+        parser = argparse.ArgumentParser(description='Run  MMPBSA simulation..')
 
         parser.add_argument('-f',
             dest='config_file',
             help='config file containing some extra parameters')
 
+        parser.add_argument('-n',
+            dest='ncpus',
+            type=int,
+            help='number of CPUs')
+
         return parser
 
-    def do_mmpbsa(self, config):
+    def do_mmpbsa(self, config, ncpus):
 
         water_and_ions = ['Na+', 'Cl-', 'WAT']
+
+        startpdb = '../common/start.pdb'
+        if not os.path.isfile(startpdb):
+            raise IOError('file %s does not exist' %startpdb)
+
         # saving complex with non-ions non-water molecules
         with open('../common/start.pdb', 'r') as startpdb:
             with open('complex.pdb', 'w') as cmplxpdb:
@@ -77,7 +88,7 @@ igb=2, saltcon=0.150,
                         print >> cmplxpdb, line.replace('\n','')
                     else: break
 
-        # saving target
+        # saving protein alone
         with open('complex.pdb', 'r') as cmplxpdb:
             with open('target.pdb', 'w') as targpdb:
                 for line in cmplxpdb:
@@ -85,7 +96,10 @@ igb=2, saltcon=0.150,
                         print >> targpdb, line.replace('\n','')
                     else: break
 
-        # saving ligand
+        # saving ligand alone
+        # in principle, lig.pdb and lig.mol2 already exist
+        # but lig.pdb can be corrupted that's why we extract
+        # the structure from start.pdb and run tleap again
         with open('complex.pdb', 'r') as cmplxpdb:
             with open('lig.pdb', 'w') as ligpdb:
                 line = cmplxpdb.next()
@@ -95,32 +109,31 @@ igb=2, saltcon=0.150,
                 for line in cmplxpdb:
                     print >> ligpdb, line.replace('\n','')
 
-        # call antechamber
-        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -du y -pf y > antchmb.log', shell=True)
-        #subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -j 4 -s 2 -at gaff -c bcc -du y -s 2 -pf y -nc 1', shell=True)
-        # create starting structure
+        # check for lignc.dat exists
+        datfile = '../common/lignc.dat'
+        if os.path.isfile(datfile):
+            f = open(datfile)
+            lignc = int(f.next())
+            f.close()
+        else:
+            raise IOError('file %s does not exist'%datfile)
+
+        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > antchmb.log'%lignc, shell=True)
         subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
+
         self.prepare_tleap_input_file(config)
         subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
-        # use ptraj to convert .dcd file to .mdcrd
-        #with open('ptraj.in', 'w') as prmfile:
-        #    print >> prmfile, 'trajin  md.dcd 0 250 1'
-        #    print >> prmfile, 'image origin center familiar com :1-1021'
-        #    print >> prmfile, 'trajout run.mdcrd trajectory'
-
-        #subprocess.call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
-
         self.prepare_mmpbsa_input_file(config)
-        subprocess.call('MMPBSA.py -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y md.dcd', shell=True)
+        subprocess.call('mpiexec -n %i MMPBSA.py.MPI -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y md.dcd'%ncpus, shell=True)
 
     def run(self):
 
         parser = self.create_arg_parser()
         args = parser.parse_args()
 
-        config = MMPBSAAchlysConfig(args.config_file)
-        self.do_mmpbsa(config)
+        config = MMPBSAConfig(args.config_file).config
+        self.do_mmpbsa(config, args.ncpus)
 
 if __name__ == '__main__':
-    MMPBSAAchlysWorker().run()
+    MMPBSAWorker().run()

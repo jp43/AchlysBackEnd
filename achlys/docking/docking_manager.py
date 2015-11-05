@@ -37,7 +37,7 @@ def submit_docking(checkjob, ligs_idxs):
     path = ssh.get_remote_path(jobid, 'pharma')
 
     # create results directory on the remote machine (pharma)
-    status = subprocess.check_output("ssh pharma 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(path, path), shell=True)
+    status = subprocess.check_output("ssh pharma 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(path, path), shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst == 1:
@@ -47,7 +47,7 @@ def submit_docking(checkjob, ligs_idxs):
 
         # secure copy ligand files
         subprocess.call("scp lig*/lig*.pdb targets/* config.ini \
-            run_docking.sge %s pharma:%s/."%(py_docking_script,path), shell=True)
+            run_docking.sge %s pharma:%s/."%(py_docking_script,path), shell=True, executable='/bin/bash')
 
         os.remove('run_docking.sge')
 
@@ -78,12 +78,12 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
 
-def write_check_docking_script(path, ligs_idxs, ntargets):
+def write_check_docking_script(path, ligs_idxs, ntargets, nposes):
 
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
 
@@ -113,14 +113,7 @@ for lig_id in %(ligs_idxs_str)s; do
     echo "import ConfigParser
 import numpy as np
 
-config = ConfigParser.SafeConfigParser()
-config.read('config.ini')
-
-if config.has_option('DOCKING', 'nposes'):
-    nposes  = config.getint('DOCKING', 'nposes') 
-else:
-    nposes = 7
-
+nposes = %(nposes)s
 free_energy = np.zeros(%(ntargets)s)
 
 for idx in range(%(ntargets)s):
@@ -157,12 +150,13 @@ done"""% locals()
 def check_docking(checkjob, ligs_idxs):
 
     ntargets = checkjob.ntargets
+    nposes = checkjob.nposes
     jobid = checkjob.jobid
 
     path = ssh.get_remote_path(jobid, 'pharma')
 
-    write_check_docking_script(path, ligs_idxs, ntargets)
-    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    write_check_docking_script(path, ligs_idxs, ntargets, nposes)
+    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status

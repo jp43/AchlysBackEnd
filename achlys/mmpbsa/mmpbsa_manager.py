@@ -9,23 +9,26 @@ import subprocess
 
 from achlys.tools import ssh
 
-def write_mmpbsa_job_script(ligs_idxs, queue='achlys.q,parallel.q'):
+def write_mmpbsa_job_script(ligs_idxs, nposes, options):
 
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
+    ressource = options['ressource']
+    walltime = options['walltime']
 
-    with open('run_mmpbsa.sge', 'w') as file:
-        script ="""#$ -N mmpbsa
+    if ressource == 'pharma':
+        scriptname = 'run_mmpbsa.sge'
+        with open(scriptname, 'w') as file:
+            script ="""#$ -N mmpbsa
 #$ -q achlys.q,parallel.q
-#$ -l h_rt=168:00:00
+#$ -l h_rt=%(walltime)s
 #$ -cwd
-#$ -t 1-7:1
+#$ -t 1-%(nposes)s:1
 #$ -pe smp 2
 #$ -S /bin/bash
 
 export AMBERHOME=/pmshare/amber/amber12-20120918
 export PATH=$AMBERHOME/bin:/opt/openmpi/1.6/gcc/bin:$PATH
 export LD_LIBRARY_PATH=$AMBERHOME/lib64:/opt/openmpi/1.6/gcc/lib:$LD_LIBRARY_PATH
-
 export PYTHONPATH=/opt/mgltools/1.5.4/MGLToolsPckgs:$HOME/achlys/lib/python2.7/site-packages:$HOME/local/lib/python2.7/site-packages:$PYTHONPATH
 
 lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
@@ -37,54 +40,55 @@ cd pose$((SGE_TASK_ID-1))/mmpbsa
 
 python ../../../run_mmpbsa.py -f ../config.ini
 echo $? > status.txt
-cd ..
-
-# get number of frames in trajectory file
-echo "parm common/start.prmtop
-trajin mmpbsa/md.dcd 1 1 1
-strip :WAT
-strip :Na+
-strip :Cl-
-trajout md.pdb pdb" > cpptraj.in
-
-cpptraj -i cpptraj.in > cpptraj.out
-
-echo "f = open('cpptraj.out', 'r')
-for line in f:
-    if all([word in line for word in ['contains','frames']]):
-        print line.split()[2]" > nframes.py
-
-nframes=`python nframes.py`
-rm -rf nframes.py md.pdb cpptraj.in cpptraj.out
-
-echo " parm common/start.prmtop
-trajin mmpbsa/md.dcd $nframes $nframes 1
-strip :WAT
-strip :Na+
-strip :Cl-
-trajout end-md.pdb pdb" > cpptraj.in
-
-cpptraj -i cpptraj.in > cpptraj.out
-rm -rf cpptraj.in cpptraj.out
 """% locals()
-        file.write(script)
+            file.write(script)
+    elif ressource == 'grex':
+        scriptname = 'run_mmpbsa.pbs'
+        with open(scriptname, 'w') as file:
+            script ="""#!/bin/bash 
+#PBS -l walltime=%(walltime)s
+#PBS -l mem=12gb
+#PBS -l nodes=1:ppn=6
+#PBS -q default
+#PBS -N mmpbsa
+
+cd $PBS_O_WORKDIR
+lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+
+for i in `seq 1 %(nposes)s`; do
+    j=$((i-1))
+    mkdir pose$j/mmpbsa
+
+    mv md${lig_id}.out/pose$j.md.dcd pose$j/mmpbsa/md.dcd
+    cd pose$j/mmpbsa
+
+    python ../../../run_mmpbsa.py -f ../config.ini -n 6
+    echo $? > status.txt
+    cd ../../
+done
+"""% locals()
+            file.write(script)
+
+    return scriptname
 
 def submit_mmpbsa(checkjob, ligs_idxs):
 
     jobid = checkjob.jobid
-    path = ssh.get_remote_path(jobid, 'pharma')
+    nposes = checkjob.nposes
+    mmpbsa_options = checkjob.mmpbsa_options
+    ressource = mmpbsa_options['ressource']
+    path = ssh.get_remote_path(jobid, ressource)
 
-    # create results directory on the remote machine (pharma)
-    status = subprocess.check_output("ssh pharma 'if [ ! -f %s/run_mmpbsa.py ]; then echo 1; else echo 0; fi'"%path, shell=True)
+    status = subprocess.check_output("ssh %s 'if [ ! -f %s/run_mmpbsa.py ]; then echo 1; else echo 0; fi'"%(ressource, path), shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst == 1:
-        write_mmpbsa_job_script(ligs_idxs)#, queue='ibmblade.q')
+        scriptname = write_mmpbsa_job_script(ligs_idxs, nposes, mmpbsa_options)
         achlysdir = os.path.realpath(__file__)
         py_docking_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/{run_mmpbsa,analysis}.py'
 
-        subprocess.call("scp run_mmpbsa.sge %s pharma:%s/."%(py_docking_scripts,path), shell=True)
-        os.remove('run_mmpbsa.sge')
+        subprocess.call("scp %s %s %s:%s/."%(scriptname,py_docking_scripts,ressource,path), shell=True, executable='/bin/bash')
+        os.remove(scriptname)
 
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
 
@@ -96,12 +100,12 @@ cd %(path)s
 # submit jobs
 for lig_id in %(ligs_idxs_str)s; do
   cd lig$lig_id
-  qsub ../run_mmpbsa.sge # submit job
+  qsub ../%(scriptname)s # submit job
   cd ..
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    subprocess.call("ssh %s 'bash -s' < tmp.sh"%ressource, shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -144,10 +148,12 @@ done"""% locals()
 def check_mmpbsa(checkjob, ligs_idxs):
 
     jobid = checkjob.jobid
-    path = ssh.get_remote_path(jobid, 'pharma')
+    mmpbsa_options = checkjob.mmpbsa_options
+    ressource = mmpbsa_options['ressource']
+    path = ssh.get_remote_path(jobid, ressource)
 
     write_check_mmpbsa_script(path, ligs_idxs)
-    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    output = subprocess.check_output("ssh %s 'bash -s' < tmp.sh"%ressource, shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     ligs_done_idxs = [ligs_idxs[idx] for idx in range(len(ligs_idxs)) if status[idx] == 'done']
@@ -158,7 +164,7 @@ def check_mmpbsa(checkjob, ligs_idxs):
         else:
             ligs_done_idxs_bash = '{' + ','.join(map(str,ligs_done_idxs)) + '}'
 
-        subprocess.call("scp pharma:%s/lig%s/lig*.info ."%(path,ligs_done_idxs_bash), shell=True) 
+        subprocess.call("scp %s:%s/lig%s/lig*.info ."%(ressource,path,ligs_done_idxs_bash), shell=True, executable='/bin/bash') 
         for idx in ligs_done_idxs:
             shutil.move('lig%s.info'%idx,'lig%s/lig.info'%idx)
 

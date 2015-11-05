@@ -35,7 +35,7 @@ charge method to estimate the appropriate net charge!!"""
 
     for nc in net_charge:
         iserror = False
-        subprocess.call('antechamber -i %s -fi pdb -o %s -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > %s'%(pdbfile, mol2file, nc, logfile), shell=True)
+        subprocess.call('antechamber -i %s -fi pdb -o %s -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > %s'%(pdbfile, mol2file, nc, logfile), shell=True, executable='/bin/bash')
         with open(logfile, 'r') as lf:
             for line in lf:
                 if 'Error' in line:
@@ -54,7 +54,7 @@ charge method to estimate the appropriate net charge!!"""
 
 def run_parmchk(mol2file, frcmodfile):
     """ run parmchk to generate frcmod file""" 
-    subprocess.check_call('parmchk -i %s -f mol2 -o %s'%(mol2file, frcmodfile), shell=True)
+    subprocess.check_call('parmchk -i %s -f mol2 -o %s'%(mol2file, frcmodfile), shell=True, executable='/bin/bash')
 
 def run_startup(config, namd=False):
 
@@ -69,7 +69,7 @@ def run_startup(config, namd=False):
     else:
         lignc = 0
 
-    netcharge = config.netcharge + lignc 
+    netcharge = lignc 
     run_tleap(config, 'leap.in', netcharge=netcharge)
 
     # check box dimensions
@@ -98,7 +98,7 @@ def run_tleap(config, leapin, netcharge=0):
     """run tleap"""
 
     prepare_tleap_input_file(config, netcharge=netcharge)
-    subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True)
+    subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True, executable='/bin/bash')
 
 def prepare_tleap_input_file(config, netcharge=0):
 
@@ -114,14 +114,6 @@ loadamberparams lig.frcmod"""
             ncls -= abs(netcharge)
         elif netcharge > 0:
             nnas -= netcharge
-#bond p.995.SG p.397.SG
-#bond p.907.SG p.230.SG
-#bond p.142.SG p.740.SG
-#bond p.652.SG p.485.SG
-#bond p.291.SG p.287.SG
-#bond p.797.SG p.801.SG
-#bond p.32.SG p.36.SG
-#bond p.542.SG p.546.SG
 
         with open('leap.in', 'w') as file:
             script ="""source leaprc.ff99SB
@@ -130,9 +122,21 @@ source leaprc.gaff
 p = loadPdb complex.pdb
 charge p
 solvatebox p TIP3PBOX 10
-addions p Na+ %(nnas)s Cl- %(ncls)s
-charge p
 saveAmberParm p start.prmtop start.inpcrd
 savepdb p start.pdb
 quit"""% locals()
             file.write(script)
+
+#        with open('leap.in', 'w') as file:
+#            script ="""source leaprc.ff99SB
+#source leaprc.gaff
+#%(lines_lig)s
+#p = loadPdb complex.pdb
+#charge p
+#solvatebox p TIP3PBOX 10
+#addions p Na+ %(nnas)s Cl- %(ncls)s
+#charge p
+#saveAmberParm p start.prmtop start.inpcrd
+#savepdb p start.pdb
+#quit"""% locals()
+#            file.write(script)

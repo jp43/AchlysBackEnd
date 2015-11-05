@@ -26,10 +26,6 @@ for posdir in pose*; do
   echo $? > status.txt
   cd ..
 done
-
-# tar poses
-#lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
-#tar -zcf poses${lig_id}.tar.gz pose* --exclude='status.txt'
 """% locals()
         file.write(script)
 
@@ -39,7 +35,7 @@ def submit_startup(checkjob, ligs_idxs):
     path = ssh.get_remote_path(jobid, 'pharma')
 
     # create results directory on the remote machine (pharma)
-    status = subprocess.check_output("ssh pharma 'if [ ! -f %s/run_md.py ]; then echo 1; else echo 0; fi'"%path, shell=True)
+    status = subprocess.check_output("ssh pharma 'if [ ! -f %s/run_md.py ]; then echo 1; else echo 0; fi'"%path, shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst == 1:
@@ -48,7 +44,8 @@ def submit_startup(checkjob, ligs_idxs):
         py_docking_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/{run_md.py,NAMD.py,amber.py}'
         py_docking_scripts += ' ' + '/'.join(achlysdir.split('/')[:-2]) + '/tools/ssh.py'
 
-        subprocess.call("scp run_startup.sge %s pharma:%s/."%(py_docking_scripts,path), shell=True)
+        #print "scp run_startup.sge %s pharma:%s/."%(py_docking_scripts,path)
+        subprocess.call("scp run_startup.sge %s pharma:%s/."%(py_docking_scripts,path), shell=True, executable='/bin/bash')
         os.remove('run_startup.sge')
 
     # submit startup scripts
@@ -68,7 +65,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    subprocess.call("ssh pharma 'bash -s' < tmp.sh", shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -108,7 +105,7 @@ def check_startup(checkjob, ligs_idxs):
     path = ssh.get_remote_path(jobid, 'pharma')
 
     write_check_startup_script(path, ligs_idxs)
-    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    output = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status
@@ -165,7 +162,7 @@ def submit_md(checkjob, ligs_idxs):
     path = ssh.get_remote_path(jobid, 'bgq')
     path_pharma = ssh.get_remote_path(jobid, 'pharma') 
 
-    status = subprocess.check_output("ssh bgq 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(path,path), shell=True)
+    status = subprocess.check_output("ssh bgq 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(path,path), shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if len(ligs_idxs) == 1:
@@ -175,9 +172,9 @@ def submit_md(checkjob, ligs_idxs):
 
     if isfirst:
         write_md_job_script()
-        subprocess.call("scp run_md.sh bgq:%s/."%path, shell=True)
+        subprocess.call("scp run_md.sh bgq:%s/."%path, shell=True, executable='/bin/bash')
 
-    subprocess.check_call("ssh -C pharma 'cd %s; tar -cf - lig%s/pose* --exclude=""status.txt""' | ssh -C bgq 'cd %s/. && tar -xf -'"%(path_pharma, ligs_idxs_bash, path), shell=True)
+    subprocess.check_call("ssh -C pharma 'cd %s; tar -cf - lig%s/pose* --exclude=""status.txt""' | ssh -C bgq 'cd %s/. && tar -xf -'"%(path_pharma, ligs_idxs_bash, path), shell=True, executable='/bin/bash')
 
     # submit startup scripts
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
@@ -192,7 +189,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh bgq 'bash -s' < tmp.sh", shell=True)
+    subprocess.call("ssh bgq 'bash -s' < tmp.sh", shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
     return status
 
@@ -226,7 +223,7 @@ for lig_id in %(ligs_idxs_str)s; do
       for posdir in pose*; do
         mv $posdir/md.dcd md${lig_id}.out/$posdir.md.dcd
       done
-      touch md${lig_id}.out/pose7.md.dcd
+      touch md${lig_id}.out/.pose.md.dcd # create an empty file
     fi
   fi
   cd ..
@@ -244,9 +241,7 @@ cd %(path)s
 for lig_id in %(ligs_idxs_str)s; do
   # check status of each docking
   status=0
-  cd lig$lig_id
-  filename=md*.out/pose7.md.dcd
-  if [ -f $filename ]; then
+  if [ -f lig${lig_id}/md${lig_id}.out/.pose.md.dcd ]; then
     status=0 
   else
     status=-1
@@ -259,19 +254,26 @@ done"""% locals()
 def check_md(checkjob, ligs_idxs):
 
     jobid = checkjob.jobid
-    path_bgq = ssh.get_remote_path(jobid, 'bgq')
-    path_pharma = ssh.get_remote_path(jobid, 'pharma')
 
-    write_check_md_script(path_bgq, ligs_idxs)
-    output = subprocess.check_output("ssh bgq 'bash -s' < tmp.sh", shell=True)
+    ressource1 = 'bgq'
+    path1 = ssh.get_remote_path(jobid, ressource1)
+    mmpbsa_options = checkjob.mmpbsa_options
+    ressource2 = mmpbsa_options['ressource']
+    path2 = ssh.get_remote_path(jobid, ressource2)
+
+    write_check_md_script(path1, ligs_idxs)
+    output = subprocess.check_output("ssh %s 'bash -s' < tmp.sh"%ressource1, shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
     status_lig = status
 
     ligs_done_idxs = [ligs_idxs[idx] for idx in range(len(ligs_idxs)) if status[idx] == 'done']
 
+    # create results directory on the remote machine
+    subprocess.call("ssh %s 'if [ ! -d %s ]; then mkdir %s; fi'"%(ressource2,path2,path2), shell=True, executable='/bin/bash')
+
     # check how many ligands have done transfering their files
-    write_check_md_transfer_script(path_pharma, ligs_done_idxs)
-    output_transfer = subprocess.check_output("ssh pharma 'bash -s' < tmp.sh", shell=True)
+    write_check_md_transfer_script(path2, ligs_done_idxs)
+    output_transfer = subprocess.check_output("ssh %s 'bash -s' < tmp.sh"%ressource2, shell=True, executable='/bin/bash')
     status_transfer = ssh.get_status_transfer(output_transfer)
     ligs_not_transfered_idxs = [ligs_done_idxs[idx] for idx in range(len(ligs_done_idxs)) if status_transfer[idx] == 'waiting']
 
@@ -281,6 +283,12 @@ def check_md(checkjob, ligs_idxs):
         else:
             ligs_not_transfered_idxs_bash = '{' + ','.join(map(str,ligs_not_transfered_idxs)) + '}'
 
-        subprocess.call("ssh -C bgq 'cd %s; tar -cf - lig%s/md*.out' | ssh -C pharma 'cd %s; tar -xf -'"%(path_bgq,ligs_not_transfered_idxs_bash,path_pharma), shell=True)
+        # check if folders "common" do not exist on the remote machine (grex)
+        status_common = subprocess.check_output("ssh %s 'if [ ! -d %s/lig%s/pose0 ]; then echo 1; else echo 0; fi'"%(ressource2,path2,ligs_not_transfered_idxs[0]), shell=True, executable='/bin/bash')
+        if int(status_common) == 1:
+            files_to_transfer = 'lig%s/{pose*/{common,config.ini},md*.out}'%ligs_not_transfered_idxs_bash
+        else:
+            files_to_transfer = 'lig%s/pose*/common'%ligs_not_transfered_idxs_bash
 
+        subprocess.call("ssh -C %s 'cd %s; tar -cf - %s' | ssh -C %s 'cd %s; tar -xf -'"%(ressource1,path1,files_to_transfer,ressource2,path2), shell=True, executable='/bin/bash')
     return status

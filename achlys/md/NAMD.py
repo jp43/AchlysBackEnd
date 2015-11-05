@@ -47,9 +47,9 @@ def run(args, config, step):
 
     if args.bgq:
         namd_exe = '/home/j/jtus/preto/modules/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2'
-        subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 : ' + namd_exe + ' ' + step + '.conf', shell=True) 
+        subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 : ' + namd_exe + ' ' + step + '.conf', shell=True, executable='/bin/bash') 
     else:
-        subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + step + '.conf', shell=True)
+        subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + step + '.conf', shell=True, executable='/bin/bash')
 
     postprocessing_md(args, config, step)
 
@@ -58,12 +58,12 @@ def postprocessing_md(args, config, step):
     dcd_file_name = step + '.dcd'
     if step != 'md':
         if args.bgq:
-            subprocess.check_call('catdcd -o end-%s.pdb -s ../common/start.pdb -otype pdb %s.dcd'%(step,step), shell=True)
+            subprocess.check_call('catdcd -o end-%s.pdb -s ../common/start.pdb -otype pdb %s.dcd'%(step,step), shell=True, executable='/bin/bash')
         else:
             with open('ptraj.in', 'w') as prmfile:
                 print >> prmfile, 'trajin %s 1 1 1'%dcd_file_name
                 print >> prmfile, 'trajout run.pdb PDB'
-            subprocess.check_call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True)
+            subprocess.check_call('ptraj ../common/start.prmtop < ptraj.in > ptraj.out', shell=True, executable='/bin/bash')
             shutil.move('run.pdb.1', 'end-%s.pdb'%step)
 
 def write_min_config_file(config, nstepsmin=5000, temperature=310.0, amber=True, **kwargs):

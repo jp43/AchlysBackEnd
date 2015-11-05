@@ -10,8 +10,6 @@ import warnings
 import ConfigParser
 import uuid
 import glob
-import time
-import datetime
 import itertools as it
 
 from achlys.docking import docking_manager
@@ -27,8 +25,11 @@ known_steps = { 0 : ('init', ''),
     1 : ('docking', 'docking.docking_manager'),
     2 : ('startup', 'md.md_manager'),
     3 : ('md', 'md.md_manager'),
-    4 : ('mmpbsa','mmpbsa.mmpbsa_manager'),
-    5 : ('analysis', '')}
+    4 : ('mmpbsa','mmpbsa.mmpbsa_manager')}
+
+known_mmpbsa_ressources = ['pharma', 'grex']
+known_md_ressources = ['bgq']
+known_docking_ressources = ['pharma']
 
 class StartJobError(Exception):
     pass
@@ -39,8 +40,11 @@ class StartJob(object):
         global known_formats
         global known_systems
 
-        config = ConfigParser.SafeConfigParser()
-        config.read(args.config_file)    
+        if os.path.splitext(args.config_file)[-1] == '.ini':
+            config = ConfigParser.SafeConfigParser()
+            config.read(args.config_file)    
+        else:
+            raise IOError('config file must be of .ini type')
 
         # check files related to the ligands
         if args.input_files_l:
@@ -249,8 +253,6 @@ class StartJob(object):
         parser = self.create_arg_parser()
         args = parser.parse_args()
         self.initialize(args)
-        # start cron job
-        #subprocess.call('(crontab -l ; echo "* * * * * check_job --id %s")| crontab'%self.jobid, shell=True)
         print '%s' % self.jobid
 
 class CheckJobError(Exception):
@@ -274,9 +276,12 @@ class CheckJob(object):
             ntargets += 1
         self.ntargets = ntargets
 
+        for inifile in glob.glob(self.workdir + '/*.ini'):
+            config_file = inifile        
+        self.parse_config(config_file)
+
         status = []
         steps = []
-
         # check current step
         for lig_idx in range(nligs):
             with open(self.workdir+'/lig%i/step.out'%lig_idx, 'r') as stf:
@@ -287,11 +292,52 @@ class CheckJob(object):
         self.status = status
         self.steps = steps
 
+    def parse_config(self, config_file):
+
+        self.config_file = config_file
+        config = ConfigParser.SafeConfigParser()
+        config.read(config_file)
+
+        if config.has_section('GENERAL'):
+            if config.has_option('GENERAL', 'nposes'):
+                self.nposes = config.getint('GENERAL', 'nposes')
+            else:
+                self.nposes = 7
+
+        mmpbsa_options = {}
+        if config.has_option('MMPBSA', 'run_on'):
+            ressource = config.get('MMPBSA', 'run_on').lower()
+            if ressource not in known_mmpbsa_ressources:
+                raise ValueError("mmpbsa ressource option should be one of " + ", ".join(known_mmpbsa_ressources))
+            mmpbsa_options['ressource'] = ressource
+        else:
+            mmpbsa_options['ressource'] = 'pharma' 
+
+        if mmpbsa_options['ressource'] == 'grex':
+            walltime = 60*self.nposes
+            walltime_h = int(walltime/60)
+            if walltime_h < 10:
+                walltime_h_str = '0' + str(walltime_h)
+            elif walltime_h >= 10 and walltime_h < 24:
+                walltime_h_str = str(walltime_h)
+            else:
+                raise ValueError("Number of poses too big to be handled in a single job on Grex")
+            walltime_m = walltime%60
+            if walltime_m < 10:
+                walltime_m_str = '0' + str(walltime_m)
+            else:
+                walltime_m_str = str(walltime_m)
+            mmpbsa_options['walltime'] = '%s:%s:00'%(walltime_h_str, walltime_m_str)
+        elif mmpbsa_options['ressource'] == 'pharma':
+            mmpbsa_options['walltime'] = '168:00:00'
+
+        self.mmpbsa_options = mmpbsa_options
+
     def update_step(self, lig_id, status_lig):
 
         step_lig = self.steps[lig_id]
 
-        if step_lig == known_steps[5] and status_lig == 'done':
+        if step_lig == known_steps[4] and status_lig == 'done':
             new_step_lig = step_lig
             new_status_lig = 'done' # the procedure is done
         elif status_lig == 'done':

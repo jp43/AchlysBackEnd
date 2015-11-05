@@ -53,11 +53,6 @@ class DockingConfig(object):
             else:
                 self.vina_options = {}
 
-        if config.has_option('DOCKING', 'nposes'):
-            self.nposes  = config.getint('DOCKING', 'nposes') 
-        else:
-            self.nposes = 7
-
         self.input_file_l = args.input_file_l
         self.input_file_r = args.input_file_r
 
@@ -172,7 +167,7 @@ vina --config vina.config &>> vina.out"""% locals()
         script_name = "run_" + config.program + ".sh"
 
         self.write_docking_script(script_name, config)
-        subprocess.call("./" + script_name)
+        subprocess.call("./" + script_name, shell=True, executable='/bin/bash')
 
     def analyze_autodock_docking_results(self, config):
 
@@ -289,7 +284,7 @@ vina --config vina.config &>> vina.out"""% locals()
                             g.write('END')
                             g.close()
                             # (A) add hydrogens to extracted structure
-                            subprocess.call('babel -ipdb ' + pdbfile_tmp + ' -opdb ' + pdbfile_h_tmp + ' -h', shell=True)
+                            subprocess.call('babel -ipdb ' + pdbfile_tmp + ' -opdb ' + pdbfile_h_tmp + ' -h', shell=True, executable='/bin/bash')
                             # (B) give unique name to atoms
                             self.give_unique_atom_names(pdbfile_h_tmp, pdbfile_h_1_tmp)
                             # (C) write target in complex.pdb

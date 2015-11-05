@@ -32,12 +32,6 @@ class MDConfig(object):
         else:
             self.program = 'namd'
             
-        if config.has_section('GENERAL'):
-            if config.has_option('GENERAL', 'netcharge'):
-                self.netcharge = config.getint('GENERAL', 'netcharge')
-            else:
-                self.netcharge = 0
-
         if self.program == 'namd':
             if config.has_section('AMBER'):
                 self.amber_options = dict(config.items('AMBER'))
