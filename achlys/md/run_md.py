@@ -37,6 +37,7 @@ class MDConfig(object):
                 self.amber_options = dict(config.items('AMBER'))
             else:
                 self.amber_options = {}
+
             if config.has_section('NAMD'):
                 self.namd_options = dict(config.items('NAMD'))
             else:

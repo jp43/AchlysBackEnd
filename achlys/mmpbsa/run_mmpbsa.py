@@ -13,6 +13,35 @@ import numpy as np
 
 known_programs = ['namd']
 
+def run_antechamber(pdbfile, mol2file):
+    """ use H++ idea of running antechamber multiple times with bcc's 
+charge method to estimate the appropriate net charge!!"""
+
+    logfile = 'antchmb.log'
+    max_net_charge = 30
+    net_charge = [0]
+    for nc in range(max_net_charge):
+        net_charge.extend([nc+1,-(nc+1)])
+
+    for nc in net_charge:
+        iserror = False
+        subprocess.call('antechamber -i %s -fi pdb -o %s -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > %s'%(pdbfile, mol2file, nc, logfile), shell=True, executable='/bin/bash')
+        with open(logfile, 'r') as lf:
+            for line in lf:
+                if 'Error' in line:
+                    iserror = True
+        if not iserror:
+            lignc = nc
+            break
+
+    if not iserror:
+        with open('lignc.dat', 'w') as ncf:
+            print >> ncf, lignc
+    else:
+        raise ValueError("No appropriate net charge was found to run antechamber's bcc charge method")
+
+    return lignc
+
 class MMPBSAConfigError(Exception):
     pass
 
@@ -110,22 +139,23 @@ igb=2, saltcon=0.150,
                     print >> ligpdb, line.replace('\n','')
 
         # check for lignc.dat exists
-        datfile = '../common/lignc.dat'
-        if os.path.isfile(datfile):
-            f = open(datfile)
-            lignc = int(f.next())
-            f.close()
-        else:
-            raise IOError('file %s does not exist'%datfile)
+        #datfile = '../common/lignc.dat'
+        #if os.path.isfile(datfile):
+        #    f = open(datfile)
+        #    lignc = int(f.next())
+        #    f.close()
+        #else:
+        #    raise IOError('file %s does not exist'%datfile)
 
-        subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > antchmb.log'%lignc, shell=True)
+        run_antechamber('lig.pdb', 'lig.mol2')
+        #subprocess.check_call('antechamber -i lig.pdb -fi pdb -o lig.mol2 -fo mol2 -at gaff -c bcc -nc %i -du y -pf y > antchmb.log'%lignc, shell=True)
         subprocess.check_call('parmchk -i lig.mol2 -f mol2 -o lig.frcmod', shell=True)
 
         self.prepare_tleap_input_file(config)
         subprocess.check_call('tleap -f leap.in > leap.log', shell=True)
 
         self.prepare_mmpbsa_input_file(config)
-        subprocess.call('mpiexec -n %i MMPBSA.py.MPI -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y md.dcd'%ncpus, shell=True)
+        subprocess.call('mpiexec -n %i MMPBSA.py.MPI -O -i mm.in -o mm.out -sp ../common/start.prmtop -cp complex.prmtop -rp target.prmtop -lp lig.prmtop -y ../md.dcd'%ncpus, shell=True)
 
     def run(self):
 

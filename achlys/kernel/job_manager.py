@@ -27,9 +27,10 @@ known_steps = { 0 : ('init', ''),
     3 : ('md', 'md.md_manager'),
     4 : ('mmpbsa','mmpbsa.mmpbsa_manager')}
 
-known_mmpbsa_ressources = ['pharma', 'grex']
-known_md_ressources = ['bgq']
 known_docking_ressources = ['pharma']
+known_startup_ressources = ['pharma']
+known_md_ressources = ['bgq']
+known_mmpbsa_ressources = ['pharma', 'grex']
 
 class StartJobError(Exception):
     pass
@@ -205,7 +206,6 @@ class StartJob(object):
             else:
                 raise StartJobError("format of input files should be among " + ", ".join(known_formats))
 
-
         # copy targets
         dir_r = workdir+'/targets'
         os.mkdir(dir_r)
@@ -298,22 +298,60 @@ class CheckJob(object):
         config = ConfigParser.SafeConfigParser()
         config.read(config_file)
 
+        # set the number of poses
         if config.has_section('GENERAL'):
             if config.has_option('GENERAL', 'nposes'):
                 self.nposes = config.getint('GENERAL', 'nposes')
             else:
                 self.nposes = 7
 
-        mmpbsa_options = {}
-        if config.has_option('MMPBSA', 'run_on'):
-            ressource = config.get('MMPBSA', 'run_on').lower()
+        # set docking settings
+        docking_settings = {}
+        if config.has_option('GENERAL', 'run_docking_on'):
+            ressource = config.get('GENERAL', 'run_docking_on').lower()
+            if ressource not in known_docking_ressources:
+                raise ValueError("docking ressource option should be one of " + ", ".join(known_docking_ressources))
+            docking_settings['ressource'] = ressource
+        else:
+            docking_settings['ressource'] = 'pharma'
+
+        self.docking_settings = docking_settings
+
+        # set docking settings
+        startup_settings = {}
+        if config.has_option('GENERAL', 'run_startup_on'):
+            ressource = config.get('GENERAL', 'run_startup_on').lower()
+            if ressource not in known_startup_ressources:
+                raise ValueError("startup ressource option should be one of " + ", ".join(known_startup_ressources))
+            startup_settings['ressource'] = ressource
+        else:
+            startup_settings['ressource'] = 'pharma'
+
+        self.startup_settings = startup_settings
+
+        # set docking settings
+        md_settings = {}
+        if config.has_option('GENERAL', 'run_md_on'):
+            ressource = config.get('GENERAL', 'run_md_on').lower()
+            if ressource not in known_md_ressources:
+                raise ValueError("md ressource option should be one of " + ", ".join(known_md_ressources))
+            md_settings['ressource'] = ressource
+        else:
+            md_settings['ressource'] = 'bgq'
+
+        self.md_settings = md_settings
+
+        # set mmpbsa settings 
+        mmpbsa_settings = {}
+        if config.has_option('GENERAL', 'run_mmpbsa_on'):
+            ressource = config.get('GENERAL', 'run_mmpbsa_on').lower()
             if ressource not in known_mmpbsa_ressources:
                 raise ValueError("mmpbsa ressource option should be one of " + ", ".join(known_mmpbsa_ressources))
-            mmpbsa_options['ressource'] = ressource
+            mmpbsa_settings['ressource'] = ressource
         else:
-            mmpbsa_options['ressource'] = 'pharma' 
+            mmpbsa_settings['ressource'] = 'pharma' 
 
-        if mmpbsa_options['ressource'] == 'grex':
+        if mmpbsa_settings['ressource'] == 'grex':
             walltime = 60*self.nposes
             walltime_h = int(walltime/60)
             if walltime_h < 10:
@@ -327,17 +365,17 @@ class CheckJob(object):
                 walltime_m_str = '0' + str(walltime_m)
             else:
                 walltime_m_str = str(walltime_m)
-            mmpbsa_options['walltime'] = '%s:%s:00'%(walltime_h_str, walltime_m_str)
-        elif mmpbsa_options['ressource'] == 'pharma':
-            mmpbsa_options['walltime'] = '168:00:00'
+            mmpbsa_settings['walltime'] = '%s:%s:00'%(walltime_h_str, walltime_m_str)
+        elif mmpbsa_settings['ressource'] == 'pharma':
+            mmpbsa_settings['walltime'] = '168:00:00'
 
-        self.mmpbsa_options = mmpbsa_options
+        self.mmpbsa_settings = mmpbsa_settings
 
     def update_step(self, lig_id, status_lig):
 
         step_lig = self.steps[lig_id]
 
-        if step_lig == known_steps[4] and status_lig == 'done':
+        if step_lig == 4 and status_lig == 'done':
             new_step_lig = step_lig
             new_status_lig = 'done' # the procedure is done
         elif status_lig == 'done':
@@ -352,9 +390,6 @@ class CheckJob(object):
 
         with open('lig%i/step.out'%lig_id, 'w') as file:
             print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[new_step_lig][0]
-
-        #self.steps[lig_id] = new_step_lig
-        #self.status[lig_id] = new_status_lig
 
     def create_arg_parser(self):
         parser = argparse.ArgumentParser(description="Run CheckJob...")

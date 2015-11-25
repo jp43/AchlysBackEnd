@@ -97,16 +97,16 @@ def update_box_dimensions(config):
 def run_tleap(config, leapin, netcharge=0):
     """run tleap"""
 
-    prepare_tleap_input_file(config, netcharge=netcharge)
+    prepare_tleap_input_file(config, netcharge=netcharge, **config.amber_options)
     subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True, executable='/bin/bash')
 
-def prepare_tleap_input_file(config, netcharge=0):
+def prepare_tleap_input_file(config, netcharge=0, addions=True, **kwargs):
 
         if config.withlig:
-            lines_lig="""LIG = loadmol2 lig.mol2
+            lines_lig = """LIG = loadmol2 lig.mol2
 loadamberparams lig.frcmod"""
         else:
-            lines_lig=""
+            lines_lig = ""
 
         nnas = 148
         ncls = 148
@@ -115,6 +115,12 @@ loadamberparams lig.frcmod"""
         elif netcharge > 0:
             nnas -= netcharge
 
+        if addions:
+            lines_addions = """addions p Na+ %(nnas)s Cl- %(ncls)s
+charge p"""% locals()
+        else:
+            lines_addions = ""
+
         with open('leap.in', 'w') as file:
             script ="""source leaprc.ff99SB
 source leaprc.gaff
@@ -122,21 +128,8 @@ source leaprc.gaff
 p = loadPdb complex.pdb
 charge p
 solvatebox p TIP3PBOX 10
+%(lines_addions)s
 saveAmberParm p start.prmtop start.inpcrd
 savepdb p start.pdb
 quit"""% locals()
             file.write(script)
-
-#        with open('leap.in', 'w') as file:
-#            script ="""source leaprc.ff99SB
-#source leaprc.gaff
-#%(lines_lig)s
-#p = loadPdb complex.pdb
-#charge p
-#solvatebox p TIP3PBOX 10
-#addions p Na+ %(nnas)s Cl- %(ncls)s
-#charge p
-#saveAmberParm p start.prmtop start.inpcrd
-#savepdb p start.pdb
-#quit"""% locals()
-#            file.write(script)

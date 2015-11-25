@@ -1,9 +1,5 @@
 import os
 import sys
-try:
-    import ssh
-except:
-    from achlys.tools import ssh
 import subprocess
 import tempfile
 import time

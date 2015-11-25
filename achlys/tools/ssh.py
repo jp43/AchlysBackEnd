@@ -43,7 +43,7 @@ def get_remote_path(jobid, machine):
         prefix = 'scratch/results'
     elif machine == 'pharma':
         # the following path is supposed to exist
-        prefix = 'tmp/results'
+        prefix = 'scratch/achlys'
     elif machine == 'grex':
         prefix = 'scratch/achlys' 
 
