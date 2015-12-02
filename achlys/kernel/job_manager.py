@@ -27,8 +27,7 @@ known_steps = { 0 : ('init', ''),
     3 : ('md', 'md.md_manager'),
     4 : ('mmpbsa','mmpbsa.mmpbsa_manager')}
 
-known_docking_ressources = ['pharma']
-known_startup_ressources = ['pharma']
+known_docking_ressources = ['pharma', 'hermes']
 known_md_ressources = ['bgq']
 known_mmpbsa_ressources = ['pharma', 'grex']
 
@@ -196,7 +195,7 @@ class StartJob(object):
                     # make ligand directory
                     os.mkdir(dir_l)
                     # Convert and copy file 
-                    os.system('babel -ismi %s -f%d -l%d -osmi %s 2>/dev/null' % 
+                    os.system('babel -ismi %s -f%d -l%d -osdf %s 2>/dev/null' % 
                             (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+'.sdf'))
                     # copy current step
                     stf = open(dir_l+'/step.out', 'w')
@@ -316,18 +315,6 @@ class CheckJob(object):
             docking_settings['ressource'] = 'pharma'
 
         self.docking_settings = docking_settings
-
-        # set docking settings
-        startup_settings = {}
-        if config.has_option('GENERAL', 'run_startup_on'):
-            ressource = config.get('GENERAL', 'run_startup_on').lower()
-            if ressource not in known_startup_ressources:
-                raise ValueError("startup ressource option should be one of " + ", ".join(known_startup_ressources))
-            startup_settings['ressource'] = ressource
-        else:
-            startup_settings['ressource'] = 'pharma'
-
-        self.startup_settings = startup_settings
 
         # set docking settings
         md_settings = {}

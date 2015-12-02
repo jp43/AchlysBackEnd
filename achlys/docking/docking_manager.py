@@ -9,10 +9,14 @@ import subprocess
 
 from achlys.tools import ssh
 
-def write_docking_script(ncpus, queue='achlys.q,serial.q,parallel.q'):
+def write_docking_script(checkjob):
 
-    with open('run_docking.sge', 'w') as file:
-        script ="""#$ -N docking-achlys
+    ncpus = checkjob.ntargets
+    ressource = checkjob.docking_settings['ressource']
+
+    if ressource == 'pharma':
+        with open('run_docking.sh', 'w') as file:
+            script ="""#$ -N docking-achlys
 #$ -q %(queue)s
 #$ -l h_rt=168:00:00
 #$ -t 1-%(ncpus)s:1
@@ -35,7 +39,35 @@ cd target$((SGE_TASK_ID-1))
 python ../../run_docking.py -f ../../config.ini
 echo $? > status2.out
 """% locals()
-        file.write(script)
+            file.write(script)
+    elif ressource == 'hermes':
+        with open('run_docking.sh', 'w') as file:
+            script ="""#!/bin/bash 
+#PBS -l walltime=02:00:00
+#PBS -l nodes=1:ppn=1,mem=1024mb
+#PBS -q hermes
+#PBS -t 1-%(ncpus)s
+#PBS -N docking-achlys
+#PBS -j oe
+
+source ~/.bash_profile
+
+cd $PBS_O_WORKDIR
+# (A) prepare files for docking
+lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+
+mkdir target$((PBS_ARRAYID-1))
+cp ../lig$lig_id.pdb target$((PBS_ARRAYID-1))/lig.pdb
+cp ../target$((PBS_ARRAYID-1)).pdb target$((PBS_ARRAYID-1))/target.pdb
+echo $? > status1.out
+
+# (B) run docking
+cd target$((PBS_ARRAYID-1))
+
+python ../../run_docking.py -f ../../config.ini
+echo $? > status2.out
+"""% locals()
+            file.write(script)
 
 def submit_docking(checkjob, ligs_idxs):
 
@@ -44,6 +76,7 @@ def submit_docking(checkjob, ligs_idxs):
     ntargets = checkjob.ntargets
     ressource = checkjob.docking_settings['ressource']
      
+    firstcommand = ssh.get_first_command(ressource)
     path = ssh.get_remote_path(jobid, ressource)
 
     # create results directory on the remote machine
@@ -51,14 +84,14 @@ def submit_docking(checkjob, ligs_idxs):
     isfirst = int(status)
 
     if isfirst == 1:
-        write_docking_script(ntargets)
+        write_docking_script(checkjob)#ntargets)
         achlysdir = os.path.realpath(__file__)
         py_docking_script  = '/'.join(achlysdir.split('/')[:-1]) + '/run_docking.py'
 
         # secure copy ligand files
         subprocess.call("scp lig*/lig*.pdb targets/* config.ini \
-            run_docking.sge %s %s:%s/."%(py_docking_script,ressource,path), shell=True, executable='/bin/bash')
-        os.remove('run_docking.sge')
+            run_docking.sh %s %s:%s/."%(py_docking_script,ressource,path), shell=True, executable='/bin/bash')
+        os.remove('run_docking.sh')
 
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
 
@@ -72,12 +105,12 @@ cd %(path)s
 for lig_id in %(ligs_idxs_str)s; do
   mkdir lig$lig_id
   cd lig$lig_id
-  qsub ../run_docking.sge # submit job
+  qsub ../run_docking.sh # submit job
   cd ..
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh %s 'bash -s' < %s"%(ressource,scriptname), shell=True, executable='/bin/bash')
+    subprocess.call("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -87,6 +120,7 @@ def check_docking(checkjob, ligs_idxs):
     ntargets = checkjob.ntargets
     jobid = checkjob.jobid
     ressource = checkjob.docking_settings['ressource']
+    firstcommand = ssh.get_first_command(ressource)
 
     path = ssh.get_remote_path(jobid, ressource)
 
@@ -116,7 +150,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    output = subprocess.check_output("ssh pharma 'bash -s' < %s"%scriptname, shell=True, executable='/bin/bash')
+    output =  subprocess.check_output("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname), shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status

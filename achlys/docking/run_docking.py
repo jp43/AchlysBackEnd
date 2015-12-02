@@ -198,7 +198,7 @@ vina --config vina.config > vina.out"""% locals()
                 for idx in range(nlines_to_skip):
                     dlgfile.next()
                 line = dlgfile.next()
-                free_energy = float(line[48:53])
+                free_energy = float(line[47:53])
                 
                 # save the binding free energy
                 with open("affinity.dat", 'w') as fefile:

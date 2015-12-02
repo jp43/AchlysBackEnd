@@ -121,8 +121,10 @@ charge p"""% locals()
         else:
             lines_addions = ""
 
+        #source leaprc.ff99SB
+
         with open('leap.in', 'w') as file:
-            script ="""source leaprc.ff99SB
+            script ="""source oldff/leaprc.ff99SB
 source leaprc.gaff
 %(lines_lig)s
 p = loadPdb complex.pdb

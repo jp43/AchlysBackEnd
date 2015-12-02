@@ -7,6 +7,7 @@ import shutil
 import argparse
 import time
 import ConfigParser
+import tempfile
 
 import amber
 import NAMD
@@ -52,6 +53,18 @@ class MDConfig(object):
                 steps[step] = True
             else:
                 steps[step] = False
+
+        if steps['startup']:
+            # check if tleap is installed 
+            tmpf = tempfile.NamedTemporaryFile(delete=False)
+            tmpf.write('quit')
+            tmpf.close()
+
+            code = subprocess.call('tleap -f %s > /dev/null'%tmpf.name, shell=True, executable='/bin/bash')
+            os.unlink(tmpf.name)
+            os.path.exists(tmpf.name)
+            if code != 0:
+                raise ValueError('Ambertools does not seem to be installed!')
 
         self.withlig = args.withlig
         self.steps = steps

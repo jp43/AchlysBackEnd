@@ -36,6 +36,15 @@ rm -rf %(tmpdir)s"""% locals()
     subprocess.check_call("ssh " + remote_host + " 'bash -s' < tmp.sh > " + output, shell=True)
 
 
+def get_first_command(machine):
+
+    if machine ==  'hermes':
+        cmd = 'source /etc/profile;'
+    else:
+        cmd = ''
+
+    return cmd
+
 def get_remote_path(jobid, machine):
     """ get path on the remote machine"""
 
@@ -46,6 +55,8 @@ def get_remote_path(jobid, machine):
         prefix = 'scratch/achlys'
     elif machine == 'grex':
         prefix = 'scratch/achlys' 
+    elif machine ==  'hermes':
+        prefix = 'scratch/achlys'
 
     suffix = 'job_' + jobid
     path = prefix + '/' + suffix
