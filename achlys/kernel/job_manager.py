@@ -18,15 +18,16 @@ from achlys.mmpbsa import mmpbsa_manager
 from achlys.tools import prep
 from achlys.tools import struct_tools
 
-known_formats = ['.pdb', '.sdf', '.mol', '.smi', '.txt']
+known_formats = ['.pdb', '.sdf', '.smi', '.txt']
 known_systems = ['herg', 'herg-cut', 'herg-inactivated']
 
-known_steps = { 0 : ('init', ''),
+known_steps = { 0 : ('init', 'tools.prep_manager'),
     1 : ('docking', 'docking.docking_manager'),
     2 : ('startup', 'md.md_manager'),
     3 : ('md', 'md.md_manager'),
     4 : ('mmpbsa','mmpbsa.mmpbsa_manager')}
 
+known_prep_ressources = ['local']
 known_docking_ressources = ['pharma', 'hermes']
 known_md_ressources = ['bgq']
 known_mmpbsa_ressources = ['pharma', 'grex']
@@ -37,6 +38,7 @@ class StartJobError(Exception):
 class StartJob(object):
 
     def initialize(self, args):
+
         global known_formats
         global known_systems
 
@@ -46,44 +48,25 @@ class StartJob(object):
         else:
             raise IOError('config file must be of .ini type')
 
-        # check files related to the ligands
-        if args.input_files_l:
-            # get extension if file names provided are correct
-            input_files_l = args.input_files_l
-            ext_l = self.get_format(args.input_files_l)
-            if ext_l == '.pdb':
-                # This code assumes only one structure in each PDB file
-                # That is normally the case but the PDB format allows multiple MODELs
-                nligs = len(args.input_files_l)
-            elif ext_l == '.sdf':
-                # I will support multiple SDF files each with multiple structures
-                nligs = 0
-                for input_file_path in args.input_files_l:
-                    nligs += struct_tools.count_structs_sdf(input_file_path)
-            elif ext_l == '.mol':
-                # .mol is used for MDL MOLfile format but also some other chemical formats
-                # MDL MOLfile format is similar to MDL SDFile format but only 1 structure per file
-                # (SDF is a container for multiple MOL)
-                nligs = len(args.input_files_l)
-            elif ext_l == '.smi' or ext_l == '.txt':
-                # SMILES files sometimes have the .txt extension
-                # But .txt could also be used for many other formats
-                # I will support multiple SMILES files each with multiple structures
-                nligs = 0
-                for input_file_path in args.input_files_l:
-                    nligs += struct_tools.count_structs_smi(input_file_path)
-            else:
-                raise StartJobError("format of input files should be among " + ", ".join(known_formats))
-        else:
-            # look for an option in the config file
-            if config.has_option('GENERAL', 'ligpath'):
-                raise NotImplemented('ligpath config option not supported')
-            else:
-                raise StartJobError('No files for ligands provided')
+        jobID = self.create_job_directory(args)
 
-        self.input_files_l = input_files_l
-        self.nligs = nligs
-        self.ext_l = ext_l
+        input_files_l = args.input_files_l
+        prep.check_ligand_files(input_files_l)
+        prep.prepare_ligand_structures(input_files_l, jobID, config)
+
+
+
+
+        #self.input_files_l = input_files_l
+        sys.exit()
+
+
+
+
+
+
+        #self.nligs = nligs
+        #self.ext_l = ext_l
 
         # check files related to the targets
         if args.input_files_r:
@@ -127,6 +110,9 @@ class StartJob(object):
 
         self.jobid = self.create_job_directory(args)
 
+    def create_ligand_files(self, args):
+        pass
+
     def create_job_directory(self, args):
 
         # creating job ID
@@ -146,70 +132,55 @@ class StartJob(object):
         # copy config file
         shutil.copyfile(args.config_file, workdir +'/config.ini')
 
-        ext_l = self.get_format(self.input_files_l)
-        lig_idx = 0
-        for file_l in self.input_files_l:
-            if ext_l == '.pdb':
-                dir_l = workdir+'/lig%i'%lig_idx
-                # make ligand directory
-                os.mkdir(dir_l)
-                # Convert and copy file
-                # os.system('babel -ipdb %s -osdf %s 2>/dev/null' % 
-                #        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
-                # copy current step
-                shutil.copyfile(file_l,dir_l+'/lig%i.pdb'%lig_idx)
-                stf = open(dir_l+'/step.out', 'w')
-                stf.write('start step 0 (init)')
-                stf.close()
-                lig_idx += 1
-            elif ext_l == '.sdf':
-                nligs_sdf = struct_tools.count_structs_sdf(file_l)
-                for idx_sdf in range(nligs_sdf):
-                    dir_l = workdir+'/lig%i'%lig_idx
-                    # make ligand directory
-                    os.mkdir(dir_l)
-                    # Convert and copy file
-                    os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' % 
-                            (file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
-                    # copy current step
-                    stf = open(dir_l+'/step.out', 'w')
-                    stf.write('start step 0 (init)')
-                    stf.close()
-                    lig_idx += 1
-            elif ext_l == '.mol':
-                dir_l = workdir+'/lig%i'%lig_idx
-                # make ligand directory
-                os.mkdir(dir_l)
-                # Convert and copy file
-                os.system('babel -imol %s -osdf %s 2>/dev/null' % 
-                        (file_l, dir_l+'/lig%i'%lig_idx+'.sdf'))
-                # copy current step
-                stf = open(dir_l+'/step.out', 'w')
-                stf.write('start step 0 (init)')
-                stf.close()
-                lig_idx += 1
-            elif ext_l == '.smi' or ext_l == '.txt':
-                nligs_smi = struct_tools.count_structs_sdf(file_l)
-                for idx_smi in range(nligs_smi):
-                    dir_l = workdir+'/lig%i'%lig_idx
-                    # make ligand directory
-                    os.mkdir(dir_l)
-                    # Convert and copy file 
-                    os.system('babel -ismi %s -f%d -l%d -osdf %s 2>/dev/null' % 
-                            (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+'.sdf'))
-                    # copy current step
-                    stf = open(dir_l+'/step.out', 'w')
-                    stf.write('start step 0 (init)')
-                    stf.close()
-                    lig_idx += 1
-            else:
-                raise StartJobError("format of input files should be among " + ", ".join(known_formats))
+        #ext_l = self.get_format(self.input_files_l)
+        #lig_idx = 0
+        #for file_l in self.input_files_l:
+        #    if ext_l == '.pdb':
+        #        dir_l = workdir+'/lig%i'%lig_idx
+        #        # make ligand directory
+        #        os.mkdir(dir_l)
+        #        # Copy file
+        #        shutil.copyfile(file_l,dir_l+'/lig%i.pdb'%lig_idx)
+        #        stf = open(dir_l+'/step.out', 'w')
+        #        stf.write('start step 0 (init)')
+        #        stf.close()
+        #        lig_idx += 1
+        #    elif ext_l == '.sdf':
+        #        nligs_sdf = struct_tools.count_structs_sdf(file_l)
+        #        for idx_sdf in range(nligs_sdf):
+        #            dir_l = workdir+'/lig%i'%lig_idx
+        #            # make ligand directory
+        #            os.mkdir(dir_l)
+        #            # Convert and copy file
+        #            os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' % 
+        #                    (file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
+        #            # copy current step
+        #            stf = open(dir_l+'/step.out', 'w')
+        #            stf.write('start step 0 (init)')
+        #            stf.close()
+        #            lig_idx += 1
+        #    elif ext_l == '.smi' or ext_l == '.txt':
+        #        nligs_smi = struct_tools.count_structs_sdf(file_l)
+        #        for idx_smi in range(nligs_smi):
+        #            dir_l = workdir+'/lig%i'%lig_idx
+        #            # make ligand directory
+        #            os.mkdir(dir_l)
+        #            # Convert and copy file 
+        #            os.system('babel -ismi %s -f%d -l%d -osdf %s 2>/dev/null' % 
+        #                    (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+'.sdf'))
+        #            # copy current step
+        #            stf = open(dir_l+'/step.out', 'w')
+        #            stf.write('start step 0 (init)')
+        #            stf.close()
+        #            lig_idx += 1
+        #    else:
+        #        raise StartJobError("format of input files should be among " + ", ".join(known_formats))
 
         # copy targets
-        dir_r = workdir+'/targets'
-        os.mkdir(dir_r)
-        for idx, file_r in enumerate(self.input_files_r):
-            shutil.copyfile(file_r,dir_r+'/target%i'%idx+self.ext_r)
+        #dir_r = workdir+'/targets'
+        #os.mkdir(dir_r)
+        #for idx, file_r in enumerate(self.input_files_r):
+        #    shutil.copyfile(file_r,dir_r+'/target%i'%idx+self.ext_r)
 
         return jobid
 
@@ -220,12 +191,13 @@ class StartJob(object):
             type=str,
             dest='input_files_l',
             nargs='*',
-            help = 'Ligand coordinate file(s): .pdb, .sdf')
+            required = True,
+            help = 'Ligand structure file(s): .pdb, .sdf, .smi')
         parser.add_argument('-r',
             type=str,
             dest='input_files_r',
             nargs='*',
-            help = 'Receptor coordinate file(s): .pdb')
+            help = 'Receptor structure file(s): .pdb')
         parser.add_argument('-f',
             dest='config_file',
             required=True,

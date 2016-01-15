@@ -24,6 +24,7 @@ def write_mmpbsa_job_script(checkjob):
 
     scriptname = 'run_mmpbsa.pbs'
     if ressource == 'pharma':
+        ssh_cmd = ssh.coat_ssh_cmd("ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose$((SGE_TASK_ID-1))/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | cd ..; tar -xf -`")
         with open(scriptname, 'w') as file:
             script ="""#$ -N mmpbsa-achlys
 #$ -q achlys.q,parallel.q
@@ -41,7 +42,7 @@ lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
 
 # (A) prepare files for mmpbsa
 dir=$PWD
-ssh -C %(ressource_md)s "cd %(path_md)s; tar -cf - lig${lig_id}/pose$((SGE_TASK_ID-1))/{md.dcd,common} --exclude=\\"status1.out\\" --exclude=\\"status2.out\\"" | cd ..; tar -xf -`
+%(ssh_cmd)s
 echo $? > status1.out
 cd $PWD
 
@@ -54,6 +55,7 @@ echo $? > status.txt
 """% locals()
             file.write(script)
     elif ressource == 'grex':
+        ssh_cmd = ssh.coat_ssh_cmd("ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose*/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`")
         with open(scriptname, 'w') as file:
             script ="""#!/bin/bash 
 #PBS -l walltime=%(walltime)s
@@ -66,7 +68,7 @@ cd $PBS_O_WORKDIR
 lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
 
 # (A) prepare files for mmpbsa
-ssh -C %(ressource_md)s "cd %(path_md)s; tar -cf - lig${lig_id}/pose*/{md.dcd,common} --exclude=\\"status1.out\\" --exclude=\\"status2.out\\"" | `cd ..; tar -xf -`
+%(ssh_cmd)s
 echo $? > status1.out
 
 cd $PBS_O_WORKDIR
@@ -93,8 +95,8 @@ def submit_mmpbsa(checkjob, ligs_idxs):
     path = ssh.get_remote_path(jobid, ressource)
 
     # create job folder if does not exist
-    status = subprocess.check_output("ssh %s 'if [ ! -f %s/run_mmpbsa.py ]; then if [ ! -d %s ]; then mkdir %s; fi; echo 1; else echo 0; fi'"\
-                 %(ressource, path, path, path), shell=True, executable='/bin/bash')
+    status = subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'if [ ! -f %s/run_mmpbsa.py ]; then if [ ! -d %s ]; then mkdir %s; fi; echo 1; else echo 0; fi'"\
+                 %(ressource, path, path, path)), shell=True, executable='/bin/bash')
 
     isfirst = int(status)
 
@@ -104,7 +106,7 @@ def submit_mmpbsa(checkjob, ligs_idxs):
         py_mmpbsa_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/run_mmpbsa.py'
         py_mmpbsa_scripts += ' ' + '/'.join(achlysdir.split('/')[:-1]) + '/../tools/analysis.py'
 
-        subprocess.call("scp config.ini run_mmpbsa.pbs %s %s:%s/."%(py_mmpbsa_scripts,ressource,path), shell=True, executable='/bin/bash')
+        subprocess.call(ssh.coat_ssh_cmd("scp config.ini run_mmpbsa.pbs %s %s:%s/."%(py_mmpbsa_scripts,ressource,path)), shell=True, executable='/bin/bash')
         os.remove('run_mmpbsa.pbs')
 
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
@@ -126,7 +128,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh %s 'bash -s' < %s"%(ressource,scriptname), shell=True, executable='/bin/bash')
+    subprocess.call(ssh.coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -173,7 +175,7 @@ def check_mmpbsa(checkjob, ligs_idxs):
 
     scriptname = 'check_mmpbsa.sh'
     write_check_mmpbsa_script(scriptname, path, ligs_idxs)
-    output = subprocess.check_output("ssh %s 'bash -s' < %s"%(ressource,scriptname), shell=True, executable='/bin/bash')
+    output = subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     ligs_done_idxs = [ligs_idxs[idx] for idx in range(len(ligs_idxs)) if status[idx] == 'done']
@@ -184,6 +186,6 @@ def check_mmpbsa(checkjob, ligs_idxs):
         else:
             ligs_done_idxs_bash = '{' + ','.join(map(str,ligs_done_idxs)) + '}'
 
-        subprocess.call("ssh -C %s \"cd %s; tar -cf - lig%s/{mob.pdb,lig.info}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid), shell=True, executable='/bin/bash')
+        subprocess.call(ssh.coat_ssh_cmd("ssh -C %s \"cd %s; tar -cf - lig%s/{mob.pdb,lig.info}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid)), shell=True, executable='/bin/bash')
 
     return status

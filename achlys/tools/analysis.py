@@ -32,14 +32,19 @@ class AnalysisConfig(object):
         if config.has_option('GENERAL', 'system'):
             system = config.get('GENERAL', 'system').lower()
             self.resnames = ['TYR', 'PHE', 'THR']
+            self.chains = ['A', 'B', 'C', 'D']
             self.resIDs = [652, 656, 623]
             self.nresidues = len(self.resnames)
             if system == 'herg':
                 # names and RSN of key residues
                 self.rresIDs = [[239, 494, 749, 1004], [243, 498, 753, 1008], [210, 465, 720, 975]]
+                self.shift = 652 - 239
+                self.shift_m = 255
             elif system == 'herg-cut':
                 # RSN of key residues
                 self.rresIDs = [[113, 241, 369, 497], [117, 245, 374, 501], [84, 212, 340, 468]]
+                self.shift = 652 - 113
+                self.shift_m = 128
             elif system == 'herg-inactivated':
                 pass
 
@@ -104,13 +109,103 @@ cluster C1 data rmsdlig repout mob repfmt pdb averagelinkage clusters 1
     def prepare_cpptraj_striping_input_file(self, filename, config):
 
         pdbfile = glob.glob('mob.*.pdb')[0]
+
         # write cpptraj config file to strip the mode of binding
         with open(filename, 'w') as file:
             script ="""parm ../common/start.prmtop
 trajin %(pdbfile)s
-mask "(:LIG<:4.0)" maskpdb mob.pdb
+strip :WAT,Na+,Cl-
+trajout mob-nowater.pdb pdb
 """% locals()
             file.write(script)
+
+    def adjust_numbering_pdb(self, filename, config):
+        """update numbering of residues in PDB file to meet common convention"""
+
+        # works only because the residue numbers are always < 10000
+        not_from_protein = ['LIG', 'WAT', 'Na+', 'Cl-']
+
+        idx_m = 0
+        idx_c = 0
+        pdbtmp = 'tmp.pdb'
+        with open(filename, 'r') as pdb1:
+            with open(pdbtmp, 'w') as pdb2:
+                for line in pdb1:
+                    if line.startswith(('ATOM', 'HETATM')):
+                        resname = line[17:20].strip()
+                        if resname in not_from_protein:
+                            newline = line
+                        else:           
+                            index = int(line[22:26])
+                            index +=  config.shift - config.shift_m*idx_m
+                            index_s = str(index)
+                            if idx_c < len(config.chains):
+                                chain_ID = config.chains[idx_c]
+                            else:
+                                chain_ID = ' '
+                            newline = line[:21] + chain_ID + (4-len(index_s)) * ' ' + index_s + line[26:]
+                    elif line.startswith('TER'):
+                        idx_m = min(3, idx_m + 1)
+                        idx_c += 1 
+                        newline = 'TER\n'
+                    else: 
+                        newline = line
+                    pdb2.write(newline)
+
+        shutil.move('tmp.pdb', filename)
+
+    def get_strip_pdb(self, pdbin, pdbout, distance, config):
+
+        distance_s = distance**2
+        # get coordinates of ligand
+        coords_lig = []
+        with open(pdbin, 'r') as pdbf:
+            for line in pdbf:
+                if line.startswith(('ATOM', 'HETATM')):
+                    resname = line[17:20].strip()
+                    if resname == 'LIG':
+                        coords_lig.append(map(float, [line[30:38], line[38:46], line[46:54]]))
+        coords_lig = np.array(coords_lig)
+
+        resID_c = 0
+        lines = ''
+        write_coords = False 
+
+        with open(pdbin, 'r') as pdb1:
+            with open(pdbout, 'w') as pdb2:
+                for line in pdb1:
+                    if line.startswith(('ATOM', 'HETATM')):
+                        # get residue ID
+                        resID = int(line[22:26].strip())
+                        if resID == resID_c: # same residue
+                            lines += line
+                        else: # the residue has changed
+                            if write_coords:
+                              pdb2.write(lines)
+                            lines = line
+                            write_coords = False
+                        coords_atoms = np.array(map(float, [line[30:38], line[38:46], line[46:54]]))
+                        value_s = np.min(np.sum((coords_lig - coords_atoms)**2, axis=1))
+                        if value_s < distance_s:
+                            write_coords = True # write residue coords
+                        resID_c = resID # update current residue
+                    else:
+                        if write_coords:
+                            pdb2.write(lines)
+                            lines = ''
+                            write_coords = False
+                        pdb2.write(line)
+
+
+        oldline = ''         
+        with open(pdbout, 'r') as pdb2:
+            with open('tmp.pdb', 'w') as pdb3:
+                for line in pdb2:
+                    if line != oldline:
+                        pdb3.write(line)
+                    oldline = line
+
+        shutil.move('tmp.pdb', pdbout)
 
     def get_distances_2_key_residues(self, config):
 
@@ -153,9 +248,19 @@ mask "(:LIG<:4.0)" maskpdb mob.pdb
         self.prepare_cpptraj_clustering_input_file(config_file_name, config)
         subprocess.call("cpptraj -i " + config_file_name + " > cpptraj.clst.out", shell=True, executable='/bin/bash')
 
+        # copy pdb file of representative structure to lig directory
+        pdbfile = glob.glob('mob.*.pdb')[0]
+        self.adjust_numbering_pdb(pdbfile, config)
+        shutil.copyfile(pdbfile, '../../mob-full.pdb')
+
         config_file_name = 'cpptraj.strip.in'
         self.prepare_cpptraj_striping_input_file(config_file_name, config)
         subprocess.call("cpptraj -i " + config_file_name + " > cpptraj.strip.out", shell=True, executable='/bin/bash')
+
+        self.adjust_numbering_pdb('mob-nowater.pdb', config)
+        shutil.copyfile('mob-nowater.pdb', '../../mob-nowater.pdb')
+
+        self.get_strip_pdb(pdbfile, '../../mob-bp.pdb', 20.0, config)
 
     def run(self):
 
@@ -174,8 +279,6 @@ mask "(:LIG<:4.0)" maskpdb mob.pdb
         for dir in glob.glob('pose*'):
             id = int(dir[4:])
             poseids.append(id)
-
-        poseids.sort()
         lowestbfe = 0
 
         curdir = os.getcwd()
@@ -194,9 +297,7 @@ mask "(:LIG<:4.0)" maskpdb mob.pdb
         avgdists = self.get_distances_2_key_residues(config)
 
         # get representative structure from trajectory
-        pdbfile = self.get_representative_structure(config)   
-        # copy pdb file of representative structure to lig directory
-        shutil.copyfile(curdir + "/pose" + str(lowestbfe_id) + '/mmpbsa/mob.pdb.1', curdir + '/mob.pdb')
+        self.get_representative_structure(config)   
         os.chdir(curdir)
 
         # write info in lig.info

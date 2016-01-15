@@ -19,13 +19,15 @@ def write_startup_job_script(checkjob):
 
     if ressource == 'pharma':
         with open('run_startup.sh', 'w') as file:
-            script ="""#$ -N startup-achlys
-#$ -q achlys.q,serial.q,parallel.q
-#$ -l h_rt=168:00:00
-#$ -cwd
-#$ -S /bin/bash
+            script ="""#!/bin/bash
+#SBATCH --time=0-02:00
+#SBATCH --partition=serial
+#SBATCH --job-name="startup-achlys"
+#SBATCH --cpus-per-task=1
 
 source ~/.bash_profile
+
+cd $SLURM_SUBMIT_DIR
 
 # (A) prepare files for md startup
 echo "import ConfigParser
@@ -63,8 +65,7 @@ for posdir in pose*; do
   python ../../run_md.py startup --withlig -f ../../config.ini
   echo $? > status2.out
   cd ..
-done
-"""% locals()
+done"""% locals()
             file.write(script)
 
     elif ressource == 'hermes':
@@ -115,8 +116,7 @@ for posdir in pose*; do
   python ../../run_md.py startup --withlig -f ../../config.ini
   echo $? > status2.out
   cd ..
-done
-"""% locals()
+done"""% locals()
             file.write(script)
 
 def submit_startup(checkjob, ligs_idxs):
@@ -124,10 +124,12 @@ def submit_startup(checkjob, ligs_idxs):
     jobid = checkjob.jobid
     ressource = checkjob.docking_settings['ressource']
     path = ssh.get_remote_path(jobid, ressource)
+    submitcommand = ssh.get_submit_command(ressource)
     firstcommand = ssh.get_first_command(ressource)
 
     # create results directory on the remote machine (pharma)
-    status = subprocess.check_output("ssh %s 'if [ ! -f %s/run_md.py ]; then echo 1; else echo 0; fi'"%(ressource,path), shell=True, executable='/bin/bash')
+    status = subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'if [ ! -f %s/run_md.py ]; then echo 1; else echo 0; fi'"%(ressource,path)),\
+        shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst == 1:
@@ -135,7 +137,7 @@ def submit_startup(checkjob, ligs_idxs):
         achlysdir = os.path.realpath(__file__)
         py_md_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/{run_md.py,NAMD.py,amber.py}'
 
-        subprocess.call("scp config.ini run_startup.sh %s %s:%s/."%(py_md_scripts,ressource,path), shell=True, executable='/bin/bash')
+        subprocess.call(ssh.coat_ssh_cmd("scp config.ini run_startup.sh %s %s:%s/."%(py_md_scripts,ressource,path)), shell=True, executable='/bin/bash')
         os.remove('run_startup.sh')
 
     # prepare md startup jobs
@@ -148,13 +150,13 @@ cd %(path)s
 
 for lig_id in %(ligs_idxs_str)s; do
   cd lig$lig_id/
-  qsub ../run_startup.sh # submit job
+  %(submitcommand)s ../run_startup.sh # submit job
   cd ..
 done"""% locals()
         file.write(script)
 
     # submit jobs
-    subprocess.call("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname), shell=True, executable='/bin/bash')
+    subprocess.call(ssh.coat_ssh_cmd("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname)), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -195,7 +197,8 @@ def check_startup(checkjob, ligs_idxs):
     scriptname = 'check_startup.sh'
     write_check_startup_script(scriptname, path, ligs_idxs)
 
-    output =  subprocess.check_output("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname), shell=True, executable='/bin/bash')
+    output =  subprocess.check_output(ssh.coat_ssh_cmd("ssh %s '%s bash -s' < %s"%(ressource,firstcommand,scriptname)),\
+        shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status
@@ -209,6 +212,8 @@ def write_md_job_script(checkjob):
 
     ressource = checkjob.md_settings['ressource']
     path = ssh.get_remote_path(jobid, ressource)
+
+    ssh_cmd = coat_ssh_cmd("ssh -C %(ressource_startup)s \"%(firstcommand_startup)s cd %(path_startup)s; tar -cf - lig${lig_id}/pose* --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`")
 
     with open('run_md.sh', 'w') as file:
         script ="""#!/bin/sh
@@ -224,7 +229,7 @@ def write_md_job_script(checkjob):
 # (A) prepare files for md
 cd $PWD
 lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
-ssh -C %(ressource_startup)s "%(firstcommand_startup)s cd %(path_startup)s; tar -cf - lig${lig_id}/pose* --exclude=\\"status1.out\\" --exclude=\\"status2.out\\"" | `cd ..; tar -xf -`
+%(ssh_cmd)s
 echo $? > status1.out
 
 # (B) run files for md
@@ -242,14 +247,14 @@ def submit_md(checkjob, ligs_idxs):
     ressource = checkjob.md_settings['ressource']
     path = ssh.get_remote_path(jobid, ressource)
 
-    status = subprocess.check_output("ssh %s 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(ressource,path,path), shell=True, executable='/bin/bash')
+    status = subprocess.check_output(coat_ssh_cmd("ssh %s 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(ressource,path,path)), shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst:
         write_md_job_script(checkjob)
         achlysdir = os.path.realpath(__file__)
         py_md_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/{run_md.py,NAMD.py,amber.py}'
-        subprocess.call("scp config.ini run_md.sh %s %s:%s/."%(py_md_scripts,ressource,path), shell=True, executable='/bin/bash')
+        subprocess.call(coat_ssh_cmd("scp config.ini run_md.sh %s %s:%s/."%(py_md_scripts,ressource,path)), shell=True, executable='/bin/bash')
 
     # prepare md jobs
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
@@ -266,7 +271,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call("ssh %s 'bash -s' < %s"%(ressource,scriptname), shell=True, executable='/bin/bash')
+    subprocess.call(coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
     return status
 
@@ -305,7 +310,7 @@ def check_md(checkjob, ligs_idxs):
     scriptname = 'check_md.sh'
     write_check_startup_script(scriptname, path, ligs_idxs)
 
-    output = subprocess.check_output("ssh %s 'bash -s' < %s"%(ressource,scriptname), shell=True, executable='/bin/bash')
+    output = subprocess.check_output(coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status

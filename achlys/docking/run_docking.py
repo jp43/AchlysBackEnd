@@ -14,6 +14,17 @@ import time
 import numpy as np
 
 known_programs = ['autodock', 'vina']
+known_systems = {'herg':
+    {'autodock': {'npts': '108,106,108', 'spacing': '0.238', 'gridcenter': '"3.966 8.683 11.093"'},
+    'vina': {'center_x': '3.966', 'center_y': '8.683', 'center_z': '11.093', 'size_x': '30.0', 'size_y': '30.0', 'size_z': '30.0', 'exhaustiveness': '8', 'seed': '18', 'cpu': '1'}},
+                 'herg-cut':
+    {'autodock': {'npts': '108,106,108', 'spacing': '0.258', 'gridcenter': '"3.966 8.683 11.093"'},
+    'vina': {'center_x': '3.966', 'center_y': '8.683', 'center_z': '11.093', 'size_x': '30.0', 'size_y': '30.0', 'size_z': '30.0', 'exhaustiveness': '8', 'seed': '18', 'cpu': '1'}},
+                 'herg-inactivated':
+    {'autodock': {'npts': '108,106,108', 'spacing': '0.258', 'gridcenter': '"0.000 0.000 -5.000"'},
+    'vina': {'center_x': '0.000', 'center_y': '0.000', 'center_z': '-5.000', 'size_x': '30.0', 'size_y': '30.0', 'size_z': '30.0', 'exhaustiveness': '8', 'seed': '18', 'cpu': '1'
+}}}
+
 known_extract_options = ['all', 'lowest', 'none']
 
 class DockingConfigError(Exception):
@@ -29,29 +40,54 @@ class DockingConfig(object):
         if config.has_option('DOCKING', 'program'):
             program = config.get('DOCKING', 'program').lower()
             if program not in known_programs:
-                raise DockingConfigError("program option should be one of " + ", ".join(known_programs)) 
+                raise DockingConfigError("program option should be one of " + ", ".join(known_programs))
             self.program = program
         else:
             self.program = 'autodock'
 
+        if config.has_option('GENERAL', 'system'):
+            self.system = config.get('GENERAL', 'system').lower()
+        else:
+            self.system = None
+
         if self.program == 'autodock':
+            if self.system in known_systems:
+                print "System known: " + self.system
+                print "I will use the following options for Autogrid:"
+                print known_systems[self.system][self.program]
+                self.autogrid_options = known_systems[self.system][self.program]
             # check autogrid options
-            if config.has_section('AUTOGRID'):
+            elif config.has_section('AUTOGRID'):
+                print "I will use the following options for Autogrid:"
                 self.autogrid_options = dict(config.items('AUTOGRID'))
+                print self.autogrid_options
             else:
                 self.autogrid_options = {}
             # check autodock options
             if config.has_section('AUTODOCK'):
+                print "I will use the following options for AutoDock:"
                 self.autodock_options = dict(config.items('AUTODOCK'))
+                print self.autodock_options
             else:
                 self.autodock_options = {}
+        else:
+            self.autodock_options = {}
 
         if self.program == 'vina':
+            if self.system in known_systems:
+                print "System known: " + self.system
+                print "I will use the following options for Vina:"
+                print known_systems[self.system][self.program]
+                self.vina_options = known_systems[self.system][self.program]
             # check vina options
-            if config.has_section('VINA'):
+            elif config.has_section('VINA'):
+                print "I will use the following options for Vina:"
                 self.vina_options = dict(config.items('VINA'))
+                print self.vina_options
             else:
                 self.vina_options = {}
+        else:
+            self.vina_options = {}
 
         self.input_file_l = args.input_file_l
         self.input_file_r = args.input_file_r
@@ -60,6 +96,7 @@ class DockingConfig(object):
             self.extract = args.extract.lower()
         else:
             raise DockingConfigError("Extract option should be one of " + ", ".join(known_extract_options))
+
 
 class DockingWorker(object):
 

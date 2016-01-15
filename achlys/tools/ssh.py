@@ -3,6 +3,15 @@ import uuid
 import tempfile
 import subprocess
 
+def coat_ssh_cmd(cmd):
+    newcmd = """while true; do
+  %(cmd)s
+  if [ $? -eq 0 ]; then break; fi
+  sleep 120s
+done"""% locals()
+
+    return newcmd
+
 def run_script(script, remote_host, files_to_copy=None, output=None, purge=True, directory=None):
 
     if output is None:
@@ -42,6 +51,17 @@ def get_first_command(machine):
         cmd = 'source /etc/profile;'
     else:
         cmd = ''
+
+    return cmd
+
+def get_submit_command(machine):
+
+    if machine == 'bgq':
+        cmd = 'llsubmit'
+    elif machine == 'pharma':
+        cmd = 'sbatch'
+    else:
+        cmd = 'qsub'
 
     return cmd
 
