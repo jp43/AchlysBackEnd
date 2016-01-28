@@ -130,6 +130,12 @@ class MDWorker(object):
             default=False,
             help='build MD folders')
 
+        parser.add_argument('--oldff',
+            dest='oldff',
+            action='store_true',
+            default=False,
+            help='Use old force field')
+
         parser.add_argument('--bgq',
             dest='bgq',
             action='store_true',
@@ -195,7 +201,7 @@ class MDWorker(object):
         config = MDConfig(args)
 
         if config.steps['startup']:
-            self.run_startup(config)
+            self.run_startup(args, config)
         elif config.steps['min'] or config.steps['equil'] or config.steps['md']:
             self.prepare_minimization_no_startup(config)
 

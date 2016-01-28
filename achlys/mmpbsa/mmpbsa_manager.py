@@ -24,7 +24,7 @@ def write_mmpbsa_job_script(checkjob):
 
     scriptname = 'run_mmpbsa.pbs'
     if ressource == 'pharma':
-        ssh_cmd = ssh.coat_ssh_cmd("ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose$((SGE_TASK_ID-1))/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | cd ..; tar -xf -`")
+        ssh_cmd = ssh.coat_ssh_cmd("""ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose$((SGE_TASK_ID-1))/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | cd ..; tar -xf -`"""% locals())
         with open(scriptname, 'w') as file:
             script ="""#$ -N mmpbsa-achlys
 #$ -q achlys.q,parallel.q
@@ -55,7 +55,7 @@ echo $? > status.txt
 """% locals()
             file.write(script)
     elif ressource == 'grex':
-        ssh_cmd = ssh.coat_ssh_cmd("ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose*/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`")
+        ssh_cmd = ssh.coat_ssh_cmd("""ssh -C %(ressource_md)s \"cd %(path_md)s; tar -cf - lig${lig_id}/pose*/{md.dcd,common} --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`"""% locals())
         with open(scriptname, 'w') as file:
             script ="""#!/bin/bash 
 #PBS -l walltime=%(walltime)s
@@ -186,6 +186,6 @@ def check_mmpbsa(checkjob, ligs_idxs):
         else:
             ligs_done_idxs_bash = '{' + ','.join(map(str,ligs_done_idxs)) + '}'
 
-        subprocess.call(ssh.coat_ssh_cmd("ssh -C %s \"cd %s; tar -cf - lig%s/{mob.pdb,lig.info}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid)), shell=True, executable='/bin/bash')
+        subprocess.call(ssh.coat_ssh_cmd("ssh -C %s \"cd %s; tar -cf - lig%s/{mob.pdb,mob-bp.pdb,lig2.info}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid)), shell=True, executable='/bin/bash')
 
     return status

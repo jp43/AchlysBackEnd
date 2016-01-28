@@ -251,14 +251,14 @@ trajout mob-nowater.pdb pdb
         # copy pdb file of representative structure to lig directory
         pdbfile = glob.glob('mob.*.pdb')[0]
         self.adjust_numbering_pdb(pdbfile, config)
-        shutil.copyfile(pdbfile, '../../mob-full.pdb')
+        #shutil.copyfile(pdbfile, '../../mob-full.pdb')
 
         config_file_name = 'cpptraj.strip.in'
         self.prepare_cpptraj_striping_input_file(config_file_name, config)
         subprocess.call("cpptraj -i " + config_file_name + " > cpptraj.strip.out", shell=True, executable='/bin/bash')
 
         self.adjust_numbering_pdb('mob-nowater.pdb', config)
-        shutil.copyfile('mob-nowater.pdb', '../../mob-nowater.pdb')
+        shutil.copyfile('mob-nowater.pdb', '../../mob.pdb')
 
         self.get_strip_pdb(pdbfile, '../../mob-bp.pdb', 20.0, config)
 
@@ -301,7 +301,7 @@ trajout mob-nowater.pdb pdb
         os.chdir(curdir)
 
         # write info in lig.info
-        with open('lig.info', 'w') as ff:
+        with open('lig2.info', 'w') as ff:
              print >> ff, "Lowest binding energy: " + str(lowestbfe)
              print >> ff, "Pose no: " + str(lowestbfe_id)
              if lowestbfe < config.femax: 

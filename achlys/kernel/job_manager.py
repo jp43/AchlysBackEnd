@@ -18,11 +18,7 @@ from achlys.mmpbsa import mmpbsa_manager
 from achlys.tools import prep
 from achlys.tools import struct_tools
 
-known_formats = ['.pdb', '.sdf', '.smi', '.txt']
-known_systems = ['herg', 'herg-cut', 'herg-inactivated']
-
-known_steps = { 0 : ('init', 'tools.prep_manager'),
-    1 : ('docking', 'docking.docking_manager'),
+known_steps = { 1 : ('docking', 'docking.docking_manager'),
     2 : ('startup', 'md.md_manager'),
     3 : ('md', 'md.md_manager'),
     4 : ('mmpbsa','mmpbsa.mmpbsa_manager')}
@@ -48,70 +44,16 @@ class StartJob(object):
         else:
             raise IOError('config file must be of .ini type')
 
-        jobID = self.create_job_directory(args)
+        jobid = self.create_job_directory(args)
 
         input_files_l = args.input_files_l
         prep.check_ligand_files(input_files_l)
-        prep.prepare_ligand_structures(input_files_l, jobID, config)
+        prep.prepare_ligand_structures(input_files_l, jobid, config)
 
+        input_files_r = args.input_files_r
+        prep.prepare_targets(input_files_r, jobid, config)
 
-
-
-        #self.input_files_l = input_files_l
-        sys.exit()
-
-
-
-
-
-
-        #self.nligs = nligs
-        #self.ext_l = ext_l
-
-        # check files related to the targets
-        if args.input_files_r:
-            input_files_r = args.input_files_r
-            # get extension if file names provided are correct
-            ext_r = self.get_format(input_files_r)
-            if ext_r == '.pdb':
-                ntargets = len(input_files_r)
-            else:
-                raise StartJobError("Only .pdb format is supported now for files containing receptors")
-        else:
-            # look for an option in the config file
-            if config.has_option('GENERAL', 'system'):
-                system = config.get('GENERAL', 'system').lower()
-                if system not in known_systems:
-                    raise StartJobError("The system specified in the configuration file should be one of " + ", ".join(known_systems))
-                if system == 'herg':
-                    achlysdir = os.path.realpath(__file__)
-                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
-                    input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                    ntargets = len(input_files_r)
-                    ext_r = '.pdb'
-                elif system == 'herg-cut':
-                    achlysdir = os.path.realpath(__file__)
-                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_cut'
-                    input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                    ntargets = len(input_files_r)
-                    ext_r = '.pdb'
-                elif system == 'herg-inactivated':
-                    achlysdir = os.path.realpath(__file__)
-                    dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_inactiv'
-                    input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                    ntargets = len(input_files_r)
-                    ext_r = '.pdb'
-            else:
-                raise StartJobError('No files for targets provided')
-
-        self.input_files_r = input_files_r
-        self.ntargets = ntargets
-        self.ext_r = ext_r
-
-        self.jobid = self.create_job_directory(args)
-
-    def create_ligand_files(self, args):
-        pass
+        return jobid
 
     def create_job_directory(self, args):
 
@@ -131,56 +73,6 @@ class StartJob(object):
 
         # copy config file
         shutil.copyfile(args.config_file, workdir +'/config.ini')
-
-        #ext_l = self.get_format(self.input_files_l)
-        #lig_idx = 0
-        #for file_l in self.input_files_l:
-        #    if ext_l == '.pdb':
-        #        dir_l = workdir+'/lig%i'%lig_idx
-        #        # make ligand directory
-        #        os.mkdir(dir_l)
-        #        # Copy file
-        #        shutil.copyfile(file_l,dir_l+'/lig%i.pdb'%lig_idx)
-        #        stf = open(dir_l+'/step.out', 'w')
-        #        stf.write('start step 0 (init)')
-        #        stf.close()
-        #        lig_idx += 1
-        #    elif ext_l == '.sdf':
-        #        nligs_sdf = struct_tools.count_structs_sdf(file_l)
-        #        for idx_sdf in range(nligs_sdf):
-        #            dir_l = workdir+'/lig%i'%lig_idx
-        #            # make ligand directory
-        #            os.mkdir(dir_l)
-        #            # Convert and copy file
-        #            os.system('babel -isdf %s -f%d -l%d -osdf %s 2>/dev/null' % 
-        #                    (file_l, idx_sdf+1, idx_sdf+1, dir_l+'/lig%i'%lig_idx+self.ext_l))
-        #            # copy current step
-        #            stf = open(dir_l+'/step.out', 'w')
-        #            stf.write('start step 0 (init)')
-        #            stf.close()
-        #            lig_idx += 1
-        #    elif ext_l == '.smi' or ext_l == '.txt':
-        #        nligs_smi = struct_tools.count_structs_sdf(file_l)
-        #        for idx_smi in range(nligs_smi):
-        #            dir_l = workdir+'/lig%i'%lig_idx
-        #            # make ligand directory
-        #            os.mkdir(dir_l)
-        #            # Convert and copy file 
-        #            os.system('babel -ismi %s -f%d -l%d -osdf %s 2>/dev/null' % 
-        #                    (file_l, idx_smi+1, idx_smi+1, dir_l+'/lig%i'%lig_idx+'.sdf'))
-        #            # copy current step
-        #            stf = open(dir_l+'/step.out', 'w')
-        #            stf.write('start step 0 (init)')
-        #            stf.close()
-        #            lig_idx += 1
-        #    else:
-        #        raise StartJobError("format of input files should be among " + ", ".join(known_formats))
-
-        # copy targets
-        #dir_r = workdir+'/targets'
-        #os.mkdir(dir_r)
-        #for idx, file_r in enumerate(self.input_files_r):
-        #    shutil.copyfile(file_r,dir_r+'/target%i'%idx+self.ext_r)
 
         return jobid
 
@@ -205,26 +97,12 @@ class StartJob(object):
     
         return parser
 
-    def get_format(self, files):
-        global known_formats
-
-        nfiles = len(files)
-        if nfiles > 1:
-            formats = [os.path.splitext(name)[1] for name in files]
-            format = formats[0]
-            if not all(format == format_q for format_q in formats):
-                raise AchlysError('filenames provided should have the same format')
-    
-        elif nfiles == 1:
-            format = os.path.splitext(files[0])[1]
-        return format
- 
     def run(self):
  
         parser = self.create_arg_parser()
         args = parser.parse_args()
-        self.initialize(args)
-        print '%s' % self.jobid
+        jobid = self.initialize(args)
+        print '%s' % jobid
 
 class CheckJobError(Exception):
     pass
@@ -392,16 +270,6 @@ class CheckJob(object):
 
         os.chdir(self.workdir)
 
-        # If a ligand is in step 0, submit a prep job
-        for lig_id in range(self.nligs):
-            if self.steps[lig_id] == 0:
-                if self.status[lig_id] == 'start':
-                    status_lig = prep.submit_prep_job(self.jobid, lig_id, submit_on='local') 
-                    self.update_step(lig_id, status_lig)
-                if self.status[lig_id] == 'running':
-                    status_lig = prep.check_prep_job(self.jobid, lig_id, submit_on='local')
-                    self.update_step(lig_id, status_lig)
-        
         for step in range(1,5): 
             for status in ['start', 'running']:
                 self.check_step(step, status)

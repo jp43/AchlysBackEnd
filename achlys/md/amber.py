@@ -56,7 +56,7 @@ def run_parmchk(mol2file, frcmodfile):
     """ run parmchk to generate frcmod file""" 
     subprocess.check_call('parmchk -i %s -f mol2 -o %s'%(mol2file, frcmodfile), shell=True, executable='/bin/bash')
 
-def run_startup(config, namd=False):
+def run_startup(args, config, namd=False):
 
     if config.withlig:
         # modify lig.pdb to meet amber convention
@@ -100,7 +100,7 @@ def run_tleap(config, leapin, netcharge=0):
     prepare_tleap_input_file(config, netcharge=netcharge, **config.amber_options)
     subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True, executable='/bin/bash')
 
-def prepare_tleap_input_file(config, netcharge=0, addions=True, **kwargs):
+def prepare_tleap_input_file(args, config, netcharge=0, addions=True, **kwargs):
 
         if config.withlig:
             lines_lig = """LIG = loadmol2 lig.mol2
@@ -121,10 +121,13 @@ charge p"""% locals()
         else:
             lines_addions = ""
 
-        #source oldff/leaprc.ff99SB
+        if config.oldff:
+            ffline = "source oldff/leaprc.ff99SB"
+        else:
+            ffline = "source leaprc.ff99SB"
 
         with open('leap.in', 'w') as file:
-            script ="""source leaprc.ff99SB
+            script ="""%(ffline)s
 source leaprc.gaff
 %(lines_lig)s
 p = loadPdb complex.pdb

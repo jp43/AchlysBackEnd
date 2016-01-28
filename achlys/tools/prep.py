@@ -9,13 +9,14 @@ import subprocess
 
 from achlys.tools import struct_tools
 
-ligprep_default_options = {'tautomerizer': False, 'ring_conf': False, 'ring_conf': False, 'tarfiles': False, 'ionization': '0'}
+ligprep_default_options = {'tautomerizer': False, 'ring_conf': False, 'stereoizer': False, 'tarfiles': False, 'ionization': '0'}
 
 # the first element of each tuple corresponds to the value True or False when the flag applies
 ligprep_bool_flags = {'tautomerizer': (False, '-nt'), 'ring_conf': (False, '-nr'), 'stereoizer': (False, '-ns'), 'tarfiles': (False, '-nz')}
 ligprep_value_flags = {'ionization': '-i'}
 
 known_formats = ['.pdb', '.sdf', '.smi', '.txt']
+known_systems = ['herg', 'herg-cut', 'herg-inactivated']
 
 def check_ligand_files(files):
 
@@ -81,10 +82,15 @@ def prepare_ligand_structures(lig_files, jobID, config):
                     ligname = ''
 
             os.mkdir(ligdir)
+            # copy original file in ligand directory
+            shutil.copyfile(ff, ligdir + '/' + os.path.basename(ff))
             # write ligand name in lig.info
             with open(ligdir + '/lig.info', 'w') as infof:
                 print >> infof, "Ligand orginal name: " + ligname 
                 print >> infof,  "Original file: " + os.path.basename(ff)
+
+            with open(ligdir + '/step.out', 'w') as f:
+                print >> f, "start step 1 (docking)"
 
             shutil.move(pdbfile, ligdir+'/lig%s.pdb'%ligid)
             nligs += 1
@@ -121,12 +127,59 @@ ligprep %(inputflag)s %(ff)s -osd job_%(jobID)s/%(outputfile)s %(flags)s"""% loc
             time.sleep(2) 
         else:
             break
-    
+
     for logf in glob.glob(suffix + '*.log'):
        os.remove(logf)
     os.remove('ligprep.sh')
 
     return outputfile
+
+def prepare_targets(input_files_r, jobid, config):
+
+    # check files related to the targets
+    if input_files_r:
+        input_files_r = input_files_r
+        # get extension if file names provided are correct
+        ext_r = self.get_format(input_files_r)
+        if ext_r == '.pdb':
+            ntargets = len(input_files_r)
+        else:
+            raise ValueError("Only .pdb format is supported now for files containing receptors")
+    else:
+        # look for an option in the config file
+        if config.has_option('GENERAL', 'system'):
+            system = config.get('GENERAL', 'system').lower()
+            if system not in known_systems:
+                raise StartJobError("The system specified in the configuration file should be one of " + ", ".join(known_systems))
+            if system == 'herg':
+                achlysdir = os.path.realpath(__file__)
+                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
+                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+                ntargets = len(input_files_r)
+                ext_r = '.pdb'
+            elif system == 'herg-cut':
+                achlysdir = os.path.realpath(__file__)
+                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_cut'
+                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+                ntargets = len(input_files_r)
+                ext_r = '.pdb'
+            elif system == 'herg-inactivated':
+                achlysdir = os.path.realpath(__file__)
+                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_inactiv'
+                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+                ntargets = len(input_files_r)
+                ext_r = '.pdb'
+        else:
+            raise ValueError('No files for targets provided')
+
+    #copy targets
+    workdir = 'job_' + jobid
+    dir_r = workdir + '/targets'
+    os.mkdir(dir_r)
+    for idx, file_r in enumerate(input_files_r):
+        shutil.copyfile(file_r,dir_r+'/target%i'%idx+ext_r)
+
+
 
 ## Convert SDF to 3D PDB file
 #def convert_sdf_to_pdb(inpath, outpath):

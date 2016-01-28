@@ -113,7 +113,7 @@ done
 # (B) run md startup
 for posdir in pose*; do 
   cd $posdir/
-  python ../../run_md.py startup --withlig -f ../../config.ini
+  python ../../run_md.py startup --withlig -f ../../config.ini --oldff
   echo $? > status2.out
   cd ..
 done"""% locals()
@@ -213,7 +213,7 @@ def write_md_job_script(checkjob):
     ressource = checkjob.md_settings['ressource']
     path = ssh.get_remote_path(jobid, ressource)
 
-    ssh_cmd = coat_ssh_cmd("ssh -C %(ressource_startup)s \"%(firstcommand_startup)s cd %(path_startup)s; tar -cf - lig${lig_id}/pose* --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`")
+    ssh_cmd = ssh.coat_ssh_cmd("""ssh -C %(ressource_startup)s \"%(firstcommand_startup)s cd %(path_startup)s; tar -cf - lig${lig_id}/pose* --exclude=\\\"status1.out\\\" --exclude=\\\"status2.out\\\"\" | `cd ..; tar -xf -`"""% locals())
 
     with open('run_md.sh', 'w') as file:
         script ="""#!/bin/sh
@@ -247,14 +247,14 @@ def submit_md(checkjob, ligs_idxs):
     ressource = checkjob.md_settings['ressource']
     path = ssh.get_remote_path(jobid, ressource)
 
-    status = subprocess.check_output(coat_ssh_cmd("ssh %s 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(ressource,path,path)), shell=True, executable='/bin/bash')
+    status = subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'if [ ! -d %s ]; then mkdir %s; echo 1; else echo 0; fi'"%(ressource,path,path)), shell=True, executable='/bin/bash')
     isfirst = int(status)
 
     if isfirst:
         write_md_job_script(checkjob)
         achlysdir = os.path.realpath(__file__)
         py_md_scripts = '/'.join(achlysdir.split('/')[:-1]) + '/{run_md.py,NAMD.py,amber.py}'
-        subprocess.call(coat_ssh_cmd("scp config.ini run_md.sh %s %s:%s/."%(py_md_scripts,ressource,path)), shell=True, executable='/bin/bash')
+        subprocess.call(ssh.coat_ssh_cmd("scp config.ini run_md.sh %s %s:%s/."%(py_md_scripts,ressource,path)), shell=True, executable='/bin/bash')
 
     # prepare md jobs
     ligs_idxs_str = ' '.join(map(str, ligs_idxs))
@@ -271,7 +271,7 @@ for lig_id in %(ligs_idxs_str)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call(coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
+    subprocess.call(ssh.coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
     return status
 
@@ -310,7 +310,7 @@ def check_md(checkjob, ligs_idxs):
     scriptname = 'check_md.sh'
     write_check_startup_script(scriptname, path, ligs_idxs)
 
-    output = subprocess.check_output(coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
+    output = subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'bash -s' < %s"%(ressource,scriptname)), shell=True, executable='/bin/bash')
     status = ssh.get_status(output)
 
     return status
