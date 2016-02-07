@@ -28,7 +28,7 @@ cd $SLURM_SUBMIT_DIR
 source ~/.bash_profile
 
 # (A) prepare files for docking
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+lig_id=`echo $PWD | grep -o 'lig.*' | sed -n s/lig//p`
 
 mkdir target$((SLURM_ARRAY_TASK_ID-1))
 cp ../lig$lig_id.pdb target$((SLURM_ARRAY_TASK_ID-1))/lig.pdb
@@ -56,7 +56,7 @@ source ~/.bash_profile
 
 cd $PBS_O_WORKDIR
 # (A) prepare files for docking
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+lig_id=`echo $PWD | grep -o 'lig.*' | sed -n s/lig//p`
 
 mkdir target$((PBS_ARRAYID-1))
 cp ../lig$lig_id.pdb target$((PBS_ARRAYID-1))/lig.pdb

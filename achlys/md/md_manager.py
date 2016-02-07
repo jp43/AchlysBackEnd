@@ -228,7 +228,7 @@ def write_md_job_script(checkjob):
 
 # (A) prepare files for md
 cd $PWD
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+lig_id=`echo $PWD | grep -o 'lig.*' | sed -n s/lig//p`
 %(ssh_cmd)s
 echo $? > status1.out
 

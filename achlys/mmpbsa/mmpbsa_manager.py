@@ -38,7 +38,7 @@ export AMBERHOME=/pmshare/amber/amber12-20120918
 export PATH=$AMBERHOME/bin:/opt/openmpi/1.6/gcc/bin:$PATH
 export LD_LIBRARY_PATH=$AMBERHOME/lib64:/opt/openmpi/1.6/gcc/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/opt/mgltools/1.5.4/MGLToolsPckgs:$HOME/achlys/lib/python2.7/site-packages:$HOME/local/lib/python2.7/site-packages:$PYTHONPATH
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+lig_id=`echo $PWD | grep -o 'lig.*' | sed -n s/lig//p`
 
 # (A) prepare files for mmpbsa
 dir=$PWD
@@ -65,7 +65,7 @@ echo $? > status.txt
 #PBS -N mmpbsa-achlys
 
 cd $PBS_O_WORKDIR
-lig_id=`echo $PWD | grep -o lig.* | sed -n s/lig//p`
+lig_id=`echo $PWD | grep -o 'lig.*' | sed -n s/lig//p`
 
 # (A) prepare files for mmpbsa
 %(ssh_cmd)s
