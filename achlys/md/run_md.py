@@ -149,7 +149,7 @@ class MDWorker(object):
         curdir = os.getcwd()
         if config.program == 'namd':
             os.chdir('common') 
-            amber.run_startup(config, namd=True)
+            amber.run_startup(args, config, namd=True)
             os.chdir(curdir)
 
     def prepare_minimization_no_startup(self, config):

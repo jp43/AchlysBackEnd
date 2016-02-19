@@ -70,7 +70,7 @@ def run_startup(args, config, namd=False):
         lignc = 0
 
     netcharge = lignc 
-    run_tleap(config, 'leap.in', netcharge=netcharge)
+    run_tleap(args, config, 'leap.in', netcharge=netcharge)
 
     # check box dimensions
     update_box_dimensions(config)
@@ -94,13 +94,13 @@ def update_box_dimensions(config):
     config.pmegridsize = [int(size/frac_pmegridsize) if int(size/frac_pmegridsize)%2 == 0 else int(size/frac_pmegridsize) + 1 for size in config.box]
 
 
-def run_tleap(config, leapin, netcharge=0):
+def run_tleap(args, config, leapin, netcharge=0):
     """run tleap"""
 
-    prepare_tleap_input_file(config, netcharge=netcharge, **config.amber_options)
+    prepare_tleap_input_file(args, config, netcharge=netcharge, **config.amber_options)
     subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True, executable='/bin/bash')
 
-def prepare_tleap_input_file(config, netcharge=0, addions=True, **kwargs):
+def prepare_tleap_input_file(args, config, netcharge=0, addions=True, **kwargs):
 
         if config.withlig:
             lines_lig = """LIG = loadmol2 lig.mol2
@@ -121,7 +121,7 @@ charge p"""% locals()
         else:
             lines_addions = ""
 
-        if config.oldff:
+        if args.oldff:
             ffline = "source oldff/leaprc.ff99SB"
         else:
             ffline = "source leaprc.ff99SB"
