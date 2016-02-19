@@ -100,7 +100,7 @@ def run_tleap(config, leapin, netcharge=0):
     prepare_tleap_input_file(config, netcharge=netcharge, **config.amber_options)
     subprocess.check_call('tleap -f %s > leap.log'%leapin, shell=True, executable='/bin/bash')
 
-def prepare_tleap_input_file(args, config, netcharge=0, addions=True, **kwargs):
+def prepare_tleap_input_file(config, netcharge=0, addions=True, **kwargs):
 
         if config.withlig:
             lines_lig = """LIG = loadmol2 lig.mol2
