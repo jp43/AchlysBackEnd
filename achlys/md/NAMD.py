@@ -5,29 +5,6 @@ import tempfile
 import time
 import shutil
 
-def create_constrained_pdbfile():
-    with open('start.pdb', 'r') as startfile:
-        with open('posres.pdb', 'w') as posresfile:
-            for line in startfile:
-                if line.startswith(('ATOM', 'HETATM')):
-                    atom_name = line[12:16].strip()
-                    res_name = line[17:20].strip()
-                    if 'WAT' in res_name: # water molecules
-                        newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                    elif 'LIG' in res_name: # atoms of the ligand
-                        if atom_name.startswith(('C', 'N', 'O')):
-                            newline = line[0:30] + '%8.3f'%50.0 + line[38:]
-                        else:
-                            newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                    else: # atoms of the protein
-                        if atom_name in ['C', 'CA', 'N', 'O']:
-                            newline = line[0:30] + '%8.3f'%50.0 + line[38:]
-                        else:
-                            newline = line[0:30] + '%8.3f'%0.0 + line[38:]
-                else:
-                    newline = line
-                print >> posresfile, newline.replace('\n','')
-
 def preprocessing_md(args, config, step, extend=False, **kwargs):
 
     config_file_func_name = 'write_' + step + '_config_file'
@@ -42,7 +19,7 @@ def run(args, config, step):
         return
 
     if args.bgq:
-        namd_exe = '/home/j/jtus/preto/modules/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2'
+        namd_exe = '/home/j/jtus/preto/src/NAMD_2.9_Source/BlueGeneQ-xlC-smp-qp/namd2'
         subprocess.check_call('runjob --np ' + str(args.ncpus) + ' --ranks-per-node=16 : ' + namd_exe + ' ' + step + '.conf', shell=True, executable='/bin/bash') 
     else:
         subprocess.check_call('mpirun --np ' + str(args.ncpus) + ' namd2 ' + step + '.conf', shell=True, executable='/bin/bash')
@@ -207,7 +184,7 @@ PMEGridSizeZ        %(pmegridsizez)i
 # No constant pressure, since we will do constant volume simulation
 constraints         on
 consref             ../min/end-min.pdb
-conskfile           ../common/posres.pdb
+conskfile           ../common/namd_equil_res.pdb
 conskcol            X
 
 # Constant Temperature Control (NVT)
@@ -288,7 +265,7 @@ PMEGridSizeZ        %(pmegridsizez)i
 
 constraints         on
 consref             ../nvt/end-nvt.pdb
-conskfile           ../common/posres.pdb
+conskfile           ../common/namd_equil_res.pdb
 conskcol            X
 
 # Constant temperature control (NVT)

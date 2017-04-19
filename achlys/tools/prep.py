@@ -1,5 +1,6 @@
 import sys
 import os
+import stat
 import shutil
 import ConfigParser
 import time
@@ -7,236 +8,114 @@ import glob
 import shutil
 import subprocess
 
-from achlys.tools import struct_tools
+from MOBPred.amber import minimz
+from MOBPred.tools import mol2
 
-ligprep_default_options = {'tautomerizer': False, 'ring_conf': False, 'stereoizer': False, 'tarfiles': False, 'ionization': '0'}
+def prepare_compounds(input_files_l, jobID,  use_ligprep=True):
 
-# the first element of each tuple corresponds to the value True or False when the flag applies
-ligprep_bool_flags = {'tautomerizer': (False, '-nt'), 'ring_conf': (False, '-nr'), 'stereoizer': (False, '-ns'), 'tarfiles': (False, '-nz')}
-ligprep_value_flags = {'ionization': '-i'}
+    # save current directory
+    curdir = os.getcwd()
 
-known_formats = ['.pdb', '.sdf', '.smi', '.txt']
-known_systems = ['herg', 'herg-cut', 'herg-inactivated']
+    for idx, file_l in enumerate(input_files_l):
+        # create lig directory
+        ligdir = 'lig' + str(idx+1)
+        ligdir = 'job_%s/'%jobID + ligdir
 
-def check_ligand_files(files):
+        if not os.path.exists(file_l):
+            raise ValueError("File %s not found!"%(file_l))
+        file_l_abspath = os.path.abspath(file_l)
+        basename, ext = os.path.splitext(file_l)
+        os.mkdir(ligdir) # create directory
 
-    for ff in files:
-        if not os.path.isfile(ff):
-            raise IOError("file " %ff + " does not exist!")
-        ext = os.path.splitext(ff)[1]
-        if ext not in known_formats:
-            raise ValueError("format of input files should be among " + ", ".join(known_formats))
+        # get compound original name
+        with open(file_l) as ff:
+           if ext == '.sdf':
+               ligname = ff.next().strip()
+           elif ext == '.smi':
+               ligname = ff.next().split()[-1]
 
-def prepare_ligand_structures(lig_files, jobID, config):
+        ligprep_dir = ligdir +'/ligprep'
+        os.mkdir(ligprep_dir)
+        os.chdir(ligprep_dir)
 
-    if config.has_section('LIGPREP'):
-        ligprep_options = dict(config.items('LIGPREP'))
-    else:
-        ligprep_options = {}
+        files_l_mol2 = generate_3D_structure(file_l_abspath)
+        os.chdir(curdir)
 
-    # set defaults options if they are not mentionned in the config file
-    for key, value in ligprep_default_options.items():
-        if key not in ligprep_options:
-            ligprep_options[key] = value
+        # create directory for each isomer
+        for jdx, file_l_mol2 in enumerate(files_l_mol2):
+            isodir = ligdir+'/iso%i'%(jdx+1)
+            os.mkdir(isodir)
+            shutil.copyfile(file_l_mol2, isodir+'/ligand.mol2')
 
-    # construct the command to execute ligprep
-    ligprep_flags_str = ""
-    for key, value in ligprep_options.items():
-        if key in ligprep_bool_flags:
-            if value == ligprep_bool_flags[key][0]:
-                ligprep_flags_str += ligprep_bool_flags[key][1] + " "
-        elif key in ligprep_value_flags:
-            ligprep_flags_str += ligprep_value_flags[key] + " " + str(value) + " "
-        else:
-            raise ValueError("Option %s does not look to be a ligprep option!"%key)
+        with open(ligdir+'/ligand.info', 'w') as infof:
+            infof.write("Ligand orginal name: %s \n"%ligname)
+            infof.write("Original file: %s\n"%file_l)
 
-    shift = 0
-    for ff in lig_files:
-        ext = os.path.splitext(ff)[1]
-        if ext in ['.sdf', '.smi', '.txt']:
-            # use ligprep if file are in .sdf or .smi formats to generate 3D structures
-            outputfile = generate_3D_structure(ff, jobID, ligprep_flags_str)
-            babel_input_flag = '-isdf'
-        elif ext == '.pdb':
-            # convert .pdb file to SDF format (assuming the structure is 3D)
-            outputfile = os.path.basename(ff)
-            shutil.copyfile(ff,'job_%s/%s'%(jobID, outputfile))
-            babel_input_flag = '-ipdb'
+        with open(ligdir+'/step.out', 'w') as f:
+            f.write("start step 1 (docking)")
 
-        suffix = os.path.splitext(outputfile)[0]
-        outputpdbfile = os.path.splitext(outputfile)[0] + '_.pdb'
-        # generate PDB files
-        subprocess.call('babel %s job_%s/%s -opdb job_%s/%s -m 2>/dev/null'%(babel_input_flag,jobID,outputfile,jobID,outputpdbfile), shell=True)
+def generate_3D_structure(file_l, flags="-ph 7.0 -pht 2.0 -i 2 -s 8 -t 4"):
 
-        nligs = 0
-        for pdbfile in glob.glob('job_%s/'%jobID + suffix + '_*.pdb'):
-            ligid = int((pdbfile.split('_')[-1]).split('.')[0]) - 1 + shift
-            ligdir = 'job_%s/'%jobID + 'lig%i'%ligid
-
-            # get ligand original name
-            with open(pdbfile) as pdbf:
-                line = pdbf.next().strip()
-                if line.startswith('COMPND') and len(line) > 6:
-                    ligname = line[6:].strip()
-                else:
-                    ligname = ''
-
-            os.mkdir(ligdir)
-            # copy original file in ligand directory
-            shutil.copyfile(ff, ligdir + '/' + os.path.basename(ff))
-            # write ligand name in lig.info
-            with open(ligdir + '/lig.info', 'w') as infof:
-                print >> infof, "Ligand orginal name: " + ligname 
-                print >> infof,  "Original file: " + os.path.basename(ff)
-
-            with open(ligdir + '/step.out', 'w') as f:
-                print >> f, "start step 1 (docking)"
-
-            shutil.move(pdbfile, ligdir+'/lig%s.pdb'%ligid)
-            nligs += 1
-
-        os.remove('job_%s/%s'%(jobID, outputfile))
-        shift += nligs 
-
-def generate_3D_structure(ff, jobID, flags):
-
-    ext = os.path.splitext(ff)[1]
+    ext = os.path.splitext(file_l)[1]
     if ext == '.sdf':
-        inputflag = '-isd'
+        input_format_flag = '-isd'
     elif ext in ['.smi', '.txt']:
-        inputflag = '-ismi'
-
-    suffix = (os.path.splitext(ff)[0]).split('/')[-1]
-    outputfile = suffix + "_3D.sdf"
-
-    with open('ligprep.sh', 'w') as file:
-        script ="""#!/bin/bash
-export SCHRODINGER=/opt/schrodinger2014-4
-export PATH="$SCHRODINGER:$PATH"
-
-ligprep %(inputflag)s %(ff)s -osd job_%(jobID)s/%(outputfile)s %(flags)s"""% locals()
-        file.write(script)
-
-    output = subprocess.check_output('bash ligprep.sh', shell=True)
-    ligprepID = output.split()[-1]  
-
-    # wait for output
-    while True:
-        output = subprocess.check_output('jobcontrol -list', shell=True)
-        if ligprepID in output:
-            time.sleep(2) 
-        else:
-            break
-
-    for logf in glob.glob(suffix + '*.log'):
-       os.remove(logf)
-    os.remove('ligprep.sh')
-
-    return outputfile
-
-def prepare_targets(input_files_r, jobid, config):
-
-    # check files related to the targets
-    if input_files_r:
-        input_files_r = input_files_r
-        # get extension if file names provided are correct
-        ext_r = self.get_format(input_files_r)
-        if ext_r == '.pdb':
-            ntargets = len(input_files_r)
-        else:
-            raise ValueError("Only .pdb format is supported now for files containing receptors")
+        input_format_flag = '-ismi'
     else:
-        # look for an option in the config file
-        if config.has_option('GENERAL', 'system'):
-            system = config.get('GENERAL', 'system').lower()
-            if system not in known_systems:
-                raise StartJobError("The system specified in the configuration file should be one of " + ", ".join(known_systems))
-            if system == 'herg':
-                achlysdir = os.path.realpath(__file__)
-                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data'
-                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                ntargets = len(input_files_r)
-                ext_r = '.pdb'
-            elif system == 'herg-cut':
-                achlysdir = os.path.realpath(__file__)
-                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_cut'
-                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                ntargets = len(input_files_r)
-                ext_r = '.pdb'
-            elif system == 'herg-inactivated':
-                achlysdir = os.path.realpath(__file__)
-                dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_inactiv'
-                input_files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
-                ntargets = len(input_files_r)
-                ext_r = '.pdb'
-        else:
-            raise ValueError('No files for targets provided')
+        raise IOError("Format %s not recognized!"%(ext[1:]))
 
-    #copy targets
+    suffix = (os.path.splitext(file_l)[0]).split('/')[-1]
+    maefile = suffix + "_prep.mae"
+    output_file = suffix + "_prep.mol2"
+
+    # write ligprep command
+    cmd = """ligprep -WAIT %(flags)s %(input_format_flag)s %(file_l)s -omae %(maefile)s
+mol2convert -imae %(maefile)s -omol2 %(output_file)s"""%locals()
+
+    script_name = 'run_ligprep.sh'
+    with open(script_name, 'w') as file:
+        script ="""#!/bin/bash
+%(cmd)s"""% locals()
+        file.write(script)
+    os.chmod(script_name, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH | stat.S_IXUSR)
+
+    # execute ligprep
+    subprocess.check_output('./' + script_name +" &> ligprep.log", shell=True, executable='/bin/bash')
+    mol2.update_mol2file(output_file, suffix + "_prep_.mol2", ligname='LIG', multi=True)
+
+    nmol2files = len(glob.glob(suffix + "_prep_*.mol2"))
+    output_files = []
+
+    # assign partial charges using Antechamber
+    for idx in range(nmol2files):
+        mol2file = suffix + "_prep_%i.mol2"%(idx+1)
+        mol2file_tmp = suffix + "_prep_%i_pc.mol2"%(idx+1)
+        minimz.run_antechamber(mol2file, mol2file_tmp, at='sybyl')
+        shutil.move(mol2file_tmp, mol2file)
+        output_files.append(os.path.abspath(mol2file))
+
+    return output_files
+
+def prepare_targets(input_files_r, jobid):
+
+    if input_files_r:
+        for file_r in input_files_r:
+            ext = os.path.splitext(file_r)[1]
+            if ext != '.pdb':
+                raise ValueError("Only .pdb format for files with target is supported")
+
+    if input_files_r:
+        files_r = input_files_r
+    else:
+        achlysdir = os.path.realpath(__file__)
+        dir_r = '/'.join(achlysdir.split('/')[:-6]) + '/share/hERG_data_cut'
+        files_r = [dir_r + '/' + file for file in os.listdir(dir_r) if os.path.splitext(file)[1] == '.pdb']
+
     workdir = 'job_' + jobid
     dir_r = workdir + '/targets'
     os.mkdir(dir_r)
-    for idx, file_r in enumerate(input_files_r):
-        shutil.copyfile(file_r,dir_r+'/target%i'%idx+ext_r)
 
-
-
-## Convert SDF to 3D PDB file
-#def convert_sdf_to_pdb(inpath, outpath):
-#    cmd = '(babel -isdf %s -ch --gen3D ---errorlevel 1 -opdb %s 2>/dev/null ; echo $? > convert_pdb_status)' % (inpath, outpath)
-#    os.system(cmd)
-#
-## Output SDF to PNG image file
-#def convert_sdf_to_png(inpath, outpath):
-#    cmd = '(babel -isdf %s -d ---errorlevel 1 -opng %s 2>/dev/null ; echo $? > convert_png_status)' % (inpath, outpath)
-#    os.system(cmd)
-#
-#def convert_pdb_to_png(inpath, outpath):
-#    cmd = '(babel -ipdb %s -d ---errorlevel 1 -opng %s 2>/dev/null ; echo $? > convert_png_status)' % (inpath, outpath)
-#    os.system(cmd)
-#
-#def submit_prep_job(jobid, lig_id, submit_on='local'):
-#    
-#    if submit_on != 'local':
-#        print 'Unsupported system for prep job'
-#        sys.exit(1)
-#        
-#    os.chdir('lig%d' % lig_id)
-#
-#    if os.path.exists('lig%d.sdf'%lig_id):
-#        convert_sdf_to_png('lig%d.sdf'%lig_id,'lig%d.png'%lig_id)
-#        convert_sdf_to_pdb('lig%d.sdf'%lig_id,'lig%d.pdb'%lig_id)        
-#    elif os.path.exists('lig%d.pdb'%lig_id):
-#        convert_pdb_to_png('lig%d.pdb'%lig_id,'lig%d.png'%lig_id)
-#
-#    os.chdir('..')
-#    return 'running'
-#
-#def check_prep_job(jobid, lig_id, submit_on='local'):
-#    
-#    if submit_on != 'local':
-#        raise ValueError('Unsupported system for prep job')
-#
-#    os.chdir('lig%d' % lig_id)
-#
-#    status = 'done'
-#    #if(os.path.exists('convert_pdb_status')):
-#    #    with open ("convert_pdb_status", "r") as myfile:
-#    #        if myfile.read().strip() == '0':
-#    #            status = 'done'
-#    #        else:
-#    #            status = 'error'
-#    #else:
-#    #    if status != 'error':
-#    #        status = 'running'
-#    os.chdir('..')
-#
-#    return status
-#
-#
-#class PrepWorker(object):
-#
-#    config = ConfigParser.SafeConfigParser()
-#    config.read(args.config_file)
-#
-#    if config.has_section('LIGPREP'):
+    # copy files
+    for idx, file_r in enumerate(files_r):
+        new_file_r = 'target' + str(idx+1) + '.pdb'
+        shutil.copyfile(file_r, dir_r+'/'+new_file_r)

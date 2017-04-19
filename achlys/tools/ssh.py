@@ -69,7 +69,7 @@ def get_remote_path(jobid, machine):
     """ get path on the remote machine"""
 
     if machine == 'bgq':
-        prefix = 'scratch/results'
+        prefix = 'scratch/achlys'
     elif machine == 'pharma':
         # the following path is supposed to exist
         prefix = 'scratch/achlys'

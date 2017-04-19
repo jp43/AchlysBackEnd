@@ -91,8 +91,8 @@ class MDConfig(object):
             if not os.path.exists('common/leap.log'):
                 raise MDConfigError('file "common/leap.log" not found!')
 
-            elif not os.path.exists('common/posres.pdb'):
-                raise MDConfigError('file "common/posres.pdb" not found!')
+            elif not os.path.exists('common/namd_equil_res.pdb'):
+                raise MDConfigError('file "common/namd_equil_res.pdb" not found!')
 
         if not steps['min'] and steps['equil']:
             if not os.path.exists('min/end-min.pdb'):

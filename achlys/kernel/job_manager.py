@@ -34,9 +34,10 @@ class StartJobError(Exception):
 class StartJob(object):
 
     def initialize(self, args):
-
         global known_formats
         global known_systems
+
+        jobid = self.create_job_directory(args)
 
         if os.path.splitext(args.config_file)[-1] == '.ini':
             config = ConfigParser.SafeConfigParser()
@@ -44,14 +45,16 @@ class StartJob(object):
         else:
             raise IOError('config file must be of .ini type')
 
-        jobid = self.create_job_directory(args)
+        input_files_l = []
+        for idx, file_l in enumerate(args.input_files_l):
+            input_files_l.append(os.path.abspath(file_l))
+        prep.prepare_compounds(input_files_l, jobid)
 
-        input_files_l = args.input_files_l
-        prep.check_ligand_files(input_files_l)
-        prep.prepare_ligand_structures(input_files_l, jobid, config)
-
-        input_files_r = args.input_files_r
-        prep.prepare_targets(input_files_r, jobid, config)
+        input_files_r = []
+        if args.input_files_r:
+            for idx, file_r in enumerate(args.input_files_r):
+                input_files_r.append(os.path.abspath(file_r))
+        prep.prepare_targets(input_files_r, jobid)
 
         return jobid
 
@@ -77,6 +80,7 @@ class StartJob(object):
         return jobid
 
     def create_arg_parser(self):
+
         parser = argparse.ArgumentParser(description="Run StartJob...")
     
         parser.add_argument('-l',
@@ -84,25 +88,28 @@ class StartJob(object):
             dest='input_files_l',
             nargs='*',
             required = True,
-            help = 'Ligand structure file(s): .pdb, .sdf, .smi')
+            help = 'Ligand structure file(s): .sdf, .smi')
+ 
         parser.add_argument('-r',
             type=str,
             dest='input_files_r',
             nargs='*',
             help = 'Receptor structure file(s): .pdb')
+
         parser.add_argument('-f',
             dest='config_file',
             required=True,
-            help='Config file containing the parameters of the procedure')
-    
+            help='Config file with parameters')
+
         return parser
 
     def run(self):
- 
+
         parser = self.create_arg_parser()
         args = parser.parse_args()
         jobid = self.initialize(args)
-        print '%s' % jobid
+
+        print 'Job %s started' % jobid
 
 class CheckJobError(Exception):
     pass
@@ -110,6 +117,7 @@ class CheckJobError(Exception):
 class CheckJob(object):
 
     def initialize(self, args):
+
         self.jobid = args.jobid
         self.workdir = 'job_' + self.jobid
 
@@ -124,16 +132,13 @@ class CheckJob(object):
         for file_r in glob.glob(self.workdir+'/targets/*'):
             ntargets += 1
         self.ntargets = ntargets
-
-        for inifile in glob.glob(self.workdir + '/*.ini'):
-            config_file = inifile        
-        self.parse_config(config_file)
+        self.parse_config(self.workdir+'/config.ini')
 
         status = []
         steps = []
         # check current step
-        for lig_idx in range(nligs):
-            with open(self.workdir+'/lig%i/step.out'%lig_idx, 'r') as stf:
+        for idx in range(nligs):
+            with open(self.workdir+'/lig%i/step.out'%(idx+1), 'r') as stf:
                 line = stf.next().split()
                 status.append(line[0])
                 steps.append(int(line[2]))
@@ -148,65 +153,21 @@ class CheckJob(object):
         config.read(config_file)
 
         # set the number of poses
+        nposes = 5
         if config.has_section('GENERAL'):
             if config.has_option('GENERAL', 'nposes'):
-                self.nposes = config.getint('GENERAL', 'nposes')
-            else:
-                self.nposes = 7
+                nposes = config.getint('GENERAL', 'nposes')
+        self.nposes = nposes
 
-        # set docking settings
-        docking_settings = {}
-        if config.has_option('GENERAL', 'run_docking_on'):
-            ressource = config.get('GENERAL', 'run_docking_on').lower()
-            if ressource not in known_docking_ressources:
-                raise ValueError("docking ressource option should be one of " + ", ".join(known_docking_ressources))
-            docking_settings['ressource'] = ressource
-        else:
-            docking_settings['ressource'] = 'pharma'
+        self.docking_settings = {'ressource': 'pharma'}
+        scoring_functions = []
+        if config.has_section('RESCORING'):
+            if config.has_option('RESCORING', 'program'):
+                scoring_functions = config.get('RESCORING', 'program').split(',')
+        self.docking_settings['scoring_functions'] = scoring_functions
 
-        self.docking_settings = docking_settings
-
-        # set docking settings
-        md_settings = {}
-        if config.has_option('GENERAL', 'run_md_on'):
-            ressource = config.get('GENERAL', 'run_md_on').lower()
-            if ressource not in known_md_ressources:
-                raise ValueError("md ressource option should be one of " + ", ".join(known_md_ressources))
-            md_settings['ressource'] = ressource
-        else:
-            md_settings['ressource'] = 'bgq'
-
-        self.md_settings = md_settings
-
-        # set mmpbsa settings 
-        mmpbsa_settings = {}
-        if config.has_option('GENERAL', 'run_mmpbsa_on'):
-            ressource = config.get('GENERAL', 'run_mmpbsa_on').lower()
-            if ressource not in known_mmpbsa_ressources:
-                raise ValueError("mmpbsa ressource option should be one of " + ", ".join(known_mmpbsa_ressources))
-            mmpbsa_settings['ressource'] = ressource
-        else:
-            mmpbsa_settings['ressource'] = 'pharma' 
-
-        if mmpbsa_settings['ressource'] == 'grex':
-            walltime = 60*self.nposes
-            walltime_h = int(walltime/60)
-            if walltime_h < 10:
-                walltime_h_str = '0' + str(walltime_h)
-            elif walltime_h >= 10 and walltime_h < 24:
-                walltime_h_str = str(walltime_h)
-            else:
-                raise ValueError("Number of poses too big to be handled in a single job on Grex")
-            walltime_m = walltime%60
-            if walltime_m < 10:
-                walltime_m_str = '0' + str(walltime_m)
-            else:
-                walltime_m_str = str(walltime_m)
-            mmpbsa_settings['walltime'] = '%s:%s:00'%(walltime_h_str, walltime_m_str)
-        elif mmpbsa_settings['ressource'] == 'pharma':
-            mmpbsa_settings['walltime'] = '168:00:00'
-
-        self.mmpbsa_settings = mmpbsa_settings
+        self.md_settings = {'ressource': 'bgq'}
+        self.mmpbsa_settings = {'ressource': 'pharma'}
 
     def update_step(self, lig_id, status_lig):
 
@@ -225,7 +186,7 @@ class CheckJob(object):
             new_step_lig = step_lig
             new_status_lig = 'running'
 
-        with open('lig%i/step.out'%lig_id, 'w') as file:
+        with open('lig%i/step.out'%(lig_id+1), 'w') as file:
             print >> file, new_status_lig + ' step ' + str(new_step_lig)  + ' (%s)'%known_steps[new_step_lig][0]
 
     def create_arg_parser(self):
@@ -275,4 +236,3 @@ class CheckJob(object):
                 self.check_step(step, status)
 
         os.chdir('..')
-
