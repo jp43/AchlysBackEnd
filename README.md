@@ -10,18 +10,18 @@ The **hERG MOB** package includes two executables:
 
 * **startjob** which is used *once* to initiate the job
   
-* **checkjob** which should be used periodically *after the startjob command has been run*
+* **checkjob** which should be used periodically after the *startjob* command has been run
 to go through all the steps of the program 
 
 ## Quick overview
 
-### the *startjob* command
+### The *startjob* command
 
 Running *startjob* will initiate the hERG MOB program. Typing *startjob -h* on a terminal
 will provide information about the input files needed to run the command.
 
 ```
-	startjob -h
+startjob -h
 usage: startjob [-h] -l [INPUT_FILES_L [INPUT_FILES_L ...]]
                 [-r [INPUT_FILES_R [INPUT_FILES_R ...]]] -f CONFIG_FILE
 
@@ -95,11 +95,11 @@ specified via the startjob command (-l flag), a folder named ligY -- where Y is 
 number of the ligand as it was passed through the startjob command -- is created within the
 job directory which includes the following items:
 
-- a file called ligand.info containing information about the compound: its original
+	- a file called ligand.info containing information about the compound: its original
 name as specified in the original ligand file (.sdf and .smi), and the location (absolute 
 path) of the file.
 
-- a file called step.out specifying which step of the **hERG MOB** algorithm is being
+	- a file called step.out specifying which step of the **hERG MOB** algorithm is being
 currently performed. After the startjob command has been run, the contents of every file 
 step.out file should be the same, i.e,
 
@@ -126,7 +126,7 @@ are assigned by using the antechamber program available within the AMBER package
 gasteiger method is used.
 
 
-### the *checkjob* command
+### The *checkjob* command
 
 *checkjob* should be used to run any step of the **hERG MOB** algorithm. *checkjob* will
 first scan the step.out file of every compound in order to determine its current status 
@@ -144,6 +144,7 @@ Only the job ID should be provided as an argument of the *checkjob* command as i
 when typing *checkjob -h* on a terminal:
 
 ```
+checkjob -h
 usage: checkjob [-h] --id JOBID
 
 Run CheckJob...
