@@ -90,7 +90,7 @@ mol2convert -imae %(maefile)s -omol2 %(output_file)s"""%locals()
     for idx in range(nmol2files):
         mol2file = suffix + "_prep_%i.mol2"%(idx+1)
         mol2file_tmp = suffix + "_prep_%i_pc.mol2"%(idx+1)
-        minimz.run_antechamber(mol2file, mol2file_tmp, at='sybyl')
+        minimz.run_antechamber(mol2file, mol2file_tmp, at='sybyl', c='gas')
         shutil.move(mol2file_tmp, mol2file)
         output_files.append(os.path.abspath(mol2file))
 

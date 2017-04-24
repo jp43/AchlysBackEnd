@@ -34,7 +34,7 @@ runanlz -w iso*/target*/%(scoring_functions_flag)s
 # (B) run md startup
 for posedir in pose{1..%(nposes)s}; do 
   cd $posedir
-  prepare_md.py -l ligand.mol2 -r target.pdb -st prep -namd -addions
+  prepare_md.py -l ligand.mol2 -r target.pdb -st prep -namd -addions -c none
   echo $? > status.out
   cd ..
 done"""% locals()
