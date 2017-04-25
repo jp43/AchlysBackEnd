@@ -170,15 +170,15 @@ PBSA and gbsa/gbsa.out for GBSA).
 
 * **Step 1 Docking**:
 
-  1\. Docking
+    1\. Docking
 
-    - Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
+        - Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
        
-    - Same binding box as Khaled's
+        - Same binding box as Khaled's
 
-  2\. Minimization
+    2\. Minimization
    
-		- minimization of the poses with AMBER
+        - minimization of the poses with AMBER
        
 		- minimization is performed in-vacuo by restraining the protein atoms
        
