@@ -170,13 +170,13 @@ PBSA and gbsa/gbsa.out for GBSA).
 
 * **Step 1 Docking**:
 
-	_1. Docking
+	1\. Docking
 
 		- Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
        
 		- Same binding box as Khaled's
 
-	_2. Minimization
+	2\. Minimization
    
 		- minimization of the poses with AMBER
        
@@ -185,7 +185,7 @@ PBSA and gbsa/gbsa.out for GBSA).
 		- the partial charges obtained at the end of the docking procedure are kept for 
 		the minimization
 
-	_3. Rescoring
+	3\. Rescoring
    
 		- Autodock and Vina scores are computed/recomputed for each pose
        
