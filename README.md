@@ -164,71 +164,71 @@ PBSA and gbsa/gbsa.out for GBSA).
 ## Workflow
 
 
-* **Step 0 Preparation** (performed by executing the startjob command):
+* **Step 0 Preparation (performed by executing the startjob command)**:
 
 	- generation of 3D structures 
 
 * **Step 1 Docking**:
 
-	1. Docking
+	_1. Docking
 
 		- Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
        
 		- Same binding box as Khaled's
 
-   2. Minimization
+	_2. Minimization
    
-       - minimization of the poses with AMBER
+		- minimization of the poses with AMBER
        
-       - minimization is performed in-vacuo by restraining the protein atoms
+		- minimization is performed in-vacuo by restraining the protein atoms
        
-       - the partial charges obtained at the end of the docking procedure are kept for 
-       the minimization
+		- the partial charges obtained at the end of the docking procedure are kept for 
+		the minimization
 
-   3. Rescoring
+	_3. Rescoring
    
-       - Autodock and Vina scores are computed/recomputed for each pose
+		- Autodock and Vina scores are computed/recomputed for each pose
        
-       - the scores are rescaled in order to have unit variance and zero mean
+		- the scores are rescaled in order to have unit variance and zero mean
        
-       - an averaged score is computed S = (S_autodock + S_vina)/2 for each pose
+		- an averaged score is computed S = (S_autodock + S_vina)/2 for each pose
        
 
-* Step 2 Startup (fast)
+* **Step 2 Startup (fast)**
 
-   1. Clustering analysis
+	1. Clustering analysis
    
-       - the minimized poses (point 2 of the docking step) are clustered using a distance 
-       cutoff of 2.0 A.
+		- the minimized poses (point 2 of the docking step) are clustered using a distance 
+		cutoff of 2.0 A.
        
-       - for each cluster generated, a score is computed based on its population, the best
-       average score S (see rescoring section above) and the number of softwares involved. 
-       N.B.: This score was reported to predict 72% of correct poses for a set 194 
-       complexes.
+		- for each cluster generated, a score is computed based on its population, the best
+		average score S (see rescoring section above) and the number of softwares involved. 
+		N.B.: This score was reported to predict 72% of correct poses for a set 194 
+		complexes.
        
-       - the representative poses of the best five clusters are kept for the next step
+		- the representative poses of the best five clusters are kept for the next step
 
-    2. Preparation of the selected poses for MD
-    
-       - The antechamber and leap programs of the AMBER package are used
+	2. Preparation of the selected poses for MD
+
+		- The antechamber and leap programs of the AMBER package are used
        
-       - The corresponding structures are set in a box and solvated. Na+ and Cl- ions are 
-       added (with concentration 0.15M) making sure the system is neutralized.
+		- The corresponding structures are set in a box and solvated. Na+ and Cl- ions are 
+		added (with concentration 0.15M) making sure the system is neutralized.
        
 
-* Step 3 Molecular Dynamics:
+* **Step 3 Molecular Dynamics**:
 
-    1. The whole MD workflow is performed using NAMD from the prepared structures of the
-    previous step
+	1. The whole MD workflow is performed using NAMD from the prepared structures of the
+	previous step
     
-    2. Minimization (40ps)
+	2. Minimization (40ps)
     
-    3. NVT equilibration (100ps), the temperature is gradually increased to 310.K
+	3. NVT equilibration (100ps), the temperature is gradually increased to 310.K
 
-    4. NPT equilibration (100ps), the pressure is set 1bar
+	4. NPT equilibration (100ps), the pressure is set 1bar
     
-    5. MD production run (2ns), a trajectory of 200 frames, saving one frame every 5000 
-    steps, is generated.
+	5. MD production run (2ns), a trajectory of 200 frames, saving one frame every 5000 
+	steps, is generated.
     
 
 * Step 4 PBSA/GBSA:
