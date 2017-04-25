@@ -155,7 +155,7 @@ optional arguments:
   
 ```
 
-After the final step (i.e., mmpbsa) has finished normally, executing the *checkjob* command
+As the final step (i.e., mmpbsa) has finished normally, executing the *checkjob* command
 will create two folders within the corresponding lig directory, i.e., *mmpbsa* and *mmgbsa*. 
 Those folders contain the best poses as predicted by the PBSA (pbsa/pbsa.pdb) and the GBSA 
 methods (pbsa/pbsa.pdb) as well as the corresponding binding energies (pbsa/pbsa.out for 
@@ -164,17 +164,17 @@ PBSA and gbsa/gbsa.out for GBSA).
 ## Workflow
 
 
-* Step 0 Preparation (performed by executing the startjob command):
+* **Step 0 Preparation** (performed by executing the startjob command):
 
-   - generation of 3D structures 
+	- generation of 3D structures 
 
-* Step 1 Docking:
+* **Step 1 Docking**:
 
-   1. Docking
+	1. Docking
 
-       - Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
+		- Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
        
-       - Same binding box as Khaled's
+		- Same binding box as Khaled's
 
    2. Minimization
    
