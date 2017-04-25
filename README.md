@@ -170,33 +170,33 @@ PBSA and gbsa/gbsa.out for GBSA).
 
 * **Step 1 Docking**:
 
-    1\. Docking
+  1 Docking
 
-        - Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
+    - Autodock, Vina and DOCK6 are used (~ 20 poses generated per software)
        
-        - Same binding box as Khaled's
+    - Same binding box as Khaled's
 
-    2\. Minimization
+  2 Minimization
    
-        - minimization of the poses with AMBER
+    - minimization of the poses with AMBER
        
-		- minimization is performed in-vacuo by restraining the protein atoms
+    - minimization is performed in-vacuo by restraining the protein atoms
        
-		- the partial charges obtained at the end of the docking procedure are kept for 
-		the minimization
+    - the partial charges obtained at the end of the docking procedure are kept for 
+    the minimization
 
-  3\. Rescoring
+  3 Rescoring
    
-		- Autodock and Vina scores are computed/recomputed for each pose
+    - Autodock and Vina scores are computed/recomputed for each pose
        
-		- the scores are rescaled in order to have unit variance and zero mean
+    - the scores are rescaled in order to have unit variance and zero mean
        
-		- an averaged score is computed S = (S_autodock + S_vina)/2 for each pose
+    - an averaged score is computed S = (S_autodock + S_vina)/2 for each pose
        
 
 * **Step 2 Startup (fast)**
 
-	1. Clustering analysis
+  1\. Clustering analysis
    
 		- the minimized poses (point 2 of the docking step) are clustered using a distance 
 		cutoff of 2.0 A.
