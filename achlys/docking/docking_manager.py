@@ -25,7 +25,7 @@ def write_docking_script(checkjob):
 cd $SLURM_SUBMIT_DIR
 source ~preto/.bash_profile
 
-for isodir in iso*; do 
+for isodir in iso1; do 
   # (A) prepare files for docking
   mkdir ${isodir}/target${SLURM_ARRAY_TASK_ID}
   cd ${isodir}/target${SLURM_ARRAY_TASK_ID}
@@ -58,7 +58,7 @@ def submit_docking(checkjob, ligs_idxs):
         write_docking_script(checkjob)
 
         # secure copy ligand files
-        subprocess.check_output(ssh.coat_ssh_cmd("tar -cf - {config.ini,lig*/iso*,targets,run_docking.sh} | \
+        subprocess.check_output(ssh.coat_ssh_cmd("tar -cf - {config.ini,lig*/iso1,targets,run_docking.sh} | \
 ssh -C %(ressource)s '(cd %(path)s; tar -xf -)'"%locals()), shell=True, executable='/bin/bash')
         os.remove('run_docking.sh')
 
@@ -102,7 +102,7 @@ cd %(path)s
 # check the status of each docking job
 for idx in %(ligs_idxs_s)s; do
   status=0
-  for dir in lig$((idx+1))/iso*/target*; do
+  for dir in lig$((idx+1))/iso1/target*; do
     filename=$dir/status.out
     if [[ -f $filename ]]; then
       num=`cat $filename`

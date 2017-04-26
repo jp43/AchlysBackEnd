@@ -29,7 +29,7 @@ def write_startup_job_script(checkjob):
 source ~/.bash_profile
 
 # (A) prepare files for md startup
-runanlz -w iso*/target*/%(scoring_functions_flag)s
+runanlz -w iso1/target*/%(scoring_functions_flag)s
 
 # (B) run md startup
 for posedir in pose{1..%(nposes)s}; do 

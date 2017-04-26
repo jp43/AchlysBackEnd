@@ -54,7 +54,10 @@ def prepare_compounds(input_files_l, jobID,  use_ligprep=True):
         with open(ligdir+'/step.out', 'w') as f:
             f.write("start step 1 (docking)")
 
-def generate_3D_structure(file_l, flags="-ph 7.0 -pht 2.0 -i 2 -s 8 -t 4"):
+def generate_3D_structure(file_l, flags="-s 1 -i 2 -W i,-ph,7.0,-pht,0.0 -t 1"):
+
+# generate only one structure: -s 1 -i 2 -W i,-ph,7.0,-pht,0.0 -t 1
+# generate more than 1 structure -ph 7.0 -pht 2.0 -i 2 -s 8 -t 4
 
     ext = os.path.splitext(file_l)[1]
     if ext == '.sdf':

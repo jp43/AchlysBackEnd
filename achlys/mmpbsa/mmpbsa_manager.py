@@ -63,7 +63,7 @@ def submit_mmpbsa(checkjob, ligs_idxs):
         write_mmpbsa_job_script(checkjob)
         achlysdir = os.path.realpath(__file__)
         analysis_script = '/'.join(achlysdir.split('/')[:-1]) + '/../tools/analysis.py'
-        subprocess.call(ssh.coat_ssh_cmd("scp config.ini run_mmpbsa.sh %s %s:%s/."%(analysis_script,ressource,path)), shell=True, executable='/bin/bash')
+        subprocess.check_output(ssh.coat_ssh_cmd("scp config.ini run_mmpbsa.sh %s %s:%s/."%(analysis_script,ressource,path)), shell=True, executable='/bin/bash')
         os.remove('run_mmpbsa.sh')
 
     ligs_idxs_s = ' '.join(map(str, ligs_idxs))
@@ -87,7 +87,7 @@ for idx in %(ligs_idxs_s)s; do
 done"""% locals()
         file.write(script)
 
-    subprocess.call(ssh.coat_ssh_cmd("ssh %s 'bash -s' < submit_mmpbsa.sh"%ressource), shell=True, executable='/bin/bash')
+    subprocess.check_output(ssh.coat_ssh_cmd("ssh %s 'bash -s' < submit_mmpbsa.sh"%ressource), shell=True, executable='/bin/bash')
     status = ['running' for idx in range(len(ligs_idxs))]
 
     return status
@@ -104,9 +104,9 @@ for idx in %(ligs_idxs_str)s; do
   # check status of each docking
   ligdir=lig$((idx+1)) 
   status=0
-  for posdir in lig${lig_id}/pose{1..%(nposes)s}; do
+  for posdir in ${ligdir}/pose{1..%(nposes)s}; do
     if [ -d $posdir ]; then
-      filename=${posdir}/mmpbsa/status.out 
+      filename=${posdir}/ligand/mmpbsa/status.out 
       if [ -f $filename ]; then
         num=`cat $filename`
         if [ $num -ne 0 ]; then
@@ -146,6 +146,6 @@ def check_mmpbsa(checkjob, ligs_idxs):
         else:
             ligs_done_idxs_bash = '{' + ','.join(map(str,ligs_done_idxs)) + '}'
 
-        subprocess.call(ssh.coat_ssh_cmd("ssh -C %s \"cd %s; tar -cf - lig%s/{pbsa,gbsa}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid)), shell=True, executable='/bin/bash')
+        subprocess.check_output(ssh.coat_ssh_cmd("ssh -C %s \"cd %s; tar -cf - lig%s/{pbsa,gbsa}\" | `cd ../job_%s; tar -xf -` "%(ressource,path,ligs_done_idxs_bash,jobid)), shell=True, executable='/bin/bash')
 
     return status
