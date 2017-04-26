@@ -118,7 +118,7 @@ command to generate all the possible 3D protonated structures of each compound. 
 the original input ligand file is *ligand.sdf*, the ligprep command will look like:
 
 ```
-ligprep -WAIT -ph 7.0 -pht 2.0 -i 2 -s 8 -t 4 -isd ligand.sdf -omae ligand.mae
+ligprep -WAIT -s 1 -i 2 -W i,-ph,7.0,-pht,0.0 -t 1 -isd ligand.sdf -omae ligand.mae
 ```
 
 The ligand.mae (Maestro file) is then converted to the .mol2 format. The partial charges
